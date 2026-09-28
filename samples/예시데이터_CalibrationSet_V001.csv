@@ -1,0 +1,17 @@
+﻿parameter,direction,zone,arm_range,event,value_pct_per_s,ecu_value
+Start_Current_Ramp_UP_Z1,UP,1,0~30%,Start,300,300
+End_Current_Ramp_UP_Z1,UP,1,0~30%,Stop(End),300,300
+Start_Current_Ramp_UP_Z2,UP,2,30~50%,Start,150,150
+End_Current_Ramp_UP_Z2,UP,2,30~50%,Stop(End),180,180
+Start_Current_Ramp_UP_Z3,UP,3,50~70%,Start,120,120
+End_Current_Ramp_UP_Z3,UP,3,50~70%,Stop(End),100,100
+Start_Current_Ramp_UP_Z4,UP,4,70~100% (100% Endpoint 포함),Start,80,80
+End_Current_Ramp_UP_Z4,UP,4,70~100% (100% Endpoint 포함),Stop(End),100,100
+Start_Current_Ramp_DOWN_Z1,DOWN,1,0~30%,Start,200,200
+End_Current_Ramp_DOWN_Z1,DOWN,1,0~30%,Stop(End),250,250
+Start_Current_Ramp_DOWN_Z2,DOWN,2,30~50%,Start,160,160
+End_Current_Ramp_DOWN_Z2,DOWN,2,30~50%,Stop(End),200,200
+Start_Current_Ramp_DOWN_Z3,DOWN,3,50~70%,Start,120,120
+End_Current_Ramp_DOWN_Z3,DOWN,3,50~70%,Stop(End),150,150
+Start_Current_Ramp_DOWN_Z4,DOWN,4,70~100% (100% Endpoint 포함),Start,100,100
+End_Current_Ramp_DOWN_Z4,DOWN,4,70~100% (100% Endpoint 포함),Stop(End),120,120

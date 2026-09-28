@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arm Current Ramp Calibration — 1단계</title>
+  <meta name="description" content="휠로더 암 감성 기반 Current Ramp Calibration 지원 도구(1단계). 시험 후 로그를 올려 Movement Start/Stop 이벤트를 판정하고 16개 Ramp 파라미터를 조정·버전 관리하는 오프라인 브라우저 도구">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header">
+    <div class="inner header-inner">
+      <a class="brand" href="#/cal">
+        <span class="brand-name">Arm Current Ramp Calibration</span>
+        <span class="brand-sub">휠로더 암 감성 기반 Offline Calibration 지원 도구 · 1단계</span>
+      </a>
+      <nav class="nav" id="nav" aria-label="주 메뉴">
+        <a href="#/cal">Calibration</a>
+        <a href="#/log">로그·Channel Mapping</a>
+        <a href="#/profile">기준 Profile·라벨</a>
+        <a href="#/versions">버전·이력</a>
+        <a href="#/settings">설정·데이터</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="sampleBanner" class="sample-banner" hidden>예시 데이터 사용 중 — 모든 로그·라벨·파라미터 값은 합성(가상) 데이터입니다. 실제 장비·시험 결과가 아닙니다.</div>
+  <div id="storageBanner" class="storage-banner" hidden>이 브라우저는 저장소를 쓸 수 없어 창을 닫으면 작업이 사라집니다. 「설정·데이터」에서 백업 파일로 내보내 두세요.</div>
+
+  <main id="main" class="inner main" tabindex="-1"></main>
+
+  <footer class="site-footer">
+    <div class="inner">1단계 도구 · 인터넷·장비 연결 없이 동작합니다 · 로그는 이 브라우저 안에서만 읽고 어디로도 보내지 않습니다</div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="dialog" class="dialog">
+    <form method="dialog" class="dialog-body" id="dialogForm">
+      <h2 id="dialogTitle"></h2>
+      <div id="dialogContent"></div>
+      <div class="dialog-actions" id="dialogActions"></div>
+    </form>
+  </dialog>
+
+  <!-- 로컬 파일(file://)로 열어도 돌도록 module 이 아닌 일반 스크립트로 불러옵니다 -->
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="js/logic.js"></script>
+  <script src="js/sample-data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/page-cal.js"></script>
+  <script src="js/page-log.js"></script>
+  <script src="js/page-other.js"></script>
+</body>
+</html>
