@@ -28,7 +28,7 @@
     if (!rows.length) h += '<p class="empty">라벨이 없습니다.</p>';
     else {
       var cols = ['label_id', 'date', 'expert', 'set_version', 'direction', 'zone', 'event', 'ramp_value', 'response_s', 'delta_pitch', 'shock_index', 'shock_label', 'pitch_label', 'resp_label', 'overall', 'memo'];
-      h += '<div class="table-wrap"><table class="list"><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' +
+      h += '<div class="table-wrap scroll-y"><table class="list"><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' +
         rows.slice(0, 300).map(function (l) { return '<tr>' + cols.map(function (c) { return '<td' + (typeof l[c] === 'number' ? ' class="num"' : '') + '>' + esc(l[c]) + '</td>'; }).join('') + '<td><button class="btn btn-sm btn-danger" data-dl="' + esc(l.label_id) + '">삭제</button></td></tr>'; }).join('') +
         '</tbody></table></div>' + (rows.length > 300 ? '<p class="note">처음 300건만 보입니다. 전체는 내보내기로 확인하세요.</p>' : '');
     }
@@ -100,7 +100,7 @@
       '</tbody></table></div><p class="note">추천값은 근거가 부족한 파라미터(NO DATA)를 현재값으로 채워 보여 줍니다.' + (App.recBlocked() ? ' 지금은 전류 % 보정이 없는 로그를 보고 있어 추천이 막혀 있습니다.' : '') + '</p></div>';
     // 이력
     h += '<div class="card"><h2>변경 이력 (' + st.history.length + '건)</h2><div class="btn-row" style="margin-bottom:8px"><button class="btn" id="histCsv">이력 CSV</button></div>' +
-      (st.history.length ? '<div class="table-wrap"><table class="list"><thead><tr><th>시간</th><th>변경자</th><th>파라미터</th><th class="num">이전값</th><th class="num">변경값</th><th>방법</th><th>사유</th></tr></thead><tbody>' +
+      (st.history.length ? '<div class="table-wrap scroll-y"><table class="list"><thead><tr><th>시간</th><th>변경자</th><th>파라미터</th><th class="num">이전값</th><th class="num">변경값</th><th>방법</th><th>사유</th></tr></thead><tbody>' +
         st.history.slice(-200).reverse().map(function (x) { return '<tr><td class="num">' + esc(x.time) + '</td><td>' + esc(x.user) + '</td><td>' + esc(L.PARAM_KEYS.indexOf(x.key) >= 0 ? L.paramLabel(x.key) : x.key) + '</td><td class="num">' + esc(x.from) + '</td><td class="num">' + esc(x.to) + '</td><td>' + esc(x.source) + '</td><td>' + esc(x.reason) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="empty">이력이 없습니다.</p>') + '</div>';
     main.innerHTML = h;
     main.querySelector('#cmpA').addEventListener('change', function (e) { cmp.a = e.target.value; App.render(); });
@@ -190,10 +190,22 @@
   ];
   var DATA_HELP = { items: [
     ['전체 백업 내보내기 · 가져오기', '파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 JSON 파일 하나로 저장하고 되살립니다. 로그 원본은 들어가지 않습니다.'],
-    ['예시 데이터 불러오기', '합성(가상) 로그 2개·예시 Set·가상 라벨을 불러옵니다. 실제 장비·시험 결과가 아닙니다.'],
+    ['예시 데이터 불러오기', '합성(가상) 로그 3개(3번째는 실제 로그와 같은 열 순서)·예시 Set·가상 라벨을 불러옵니다. 실제 장비·시험 결과가 아닙니다.'],
     ['모두 지우기', '이 브라우저에 저장된 위 항목을 모두 지웁니다. 되돌릴 수 없으니 먼저 백업하세요.'],
     ['Mapping Profile', '로그·Channel Mapping 화면에서 확정해 저장한 매핑(원문 헤더·단위·역할·보정값)입니다. 같은 구조의 로그를 올리면 제안 상태로 되살아납니다. 감성 평가용 기준 시험원 Profile 과는 별개입니다.']],
     src: '출처: 기획서 3.2 Mapping Profile·7장, 코드(백업·예시 데이터)' };
+  // Zone별 점수 배율 — 설정 화면 표와 Calibration 판정표가 같은 설명을 씁니다 (2026-09-29 오전 2차 요청)
+  var WEIGHT_HELP = { items: [
+    ['배율이 들어가는 곳', '측정값에 이벤트가 난 Zone 의 배율을 곱한 「배율 적용값」을 허용 범위의 상한과 비교합니다. 상한 자체는 바꾸지 않습니다.'],
+    ['항목 점수 (%)', '배율 적용값 ÷ 상한 × 100 입니다(한계 사용률). 100 을 넘으면 그 항목은 FAIL, 100 − CAUTION 폭(기본 90)을 넘으면 CAUTION 입니다.'],
+    ['종합 점수 · 종합 판정', '종합 점수는 세 항목 점수 가운데 가장 큰 값입니다. 가장 한계에 가까운 항목이 종합 판정을 정합니다. 100 초과 항목이 있으면 FAIL(여럿이면 충격 → 안정도 → 응답성 순으로 대표), 없고 기준·값이 빠진 항목이 있으면 NO DATA, 그다음 CAUTION, 모두 안쪽이면 PASS 입니다. Safety Limit 초과는 배율과 관계없이 먼저 FAIL 입니다.'],
+    ['배율 값의 뜻', '1 = 배율 없음(기본값, 배율을 넣기 전과 같은 판정). 1 보다 크면 그 Zone 에서 그 항목을 더 엄하게, 1 보다 작으면 느슨하게 봅니다. 0 이면 그 항목을 판정에서 빼는 것과 같습니다. 0~10 사이만 받습니다.'],
+    ['예', 'Zone 1 의 충격지수 배율 1.2, Shock Index 0.45, 상한 0.5 → 적용값 0.54, 점수 108% → FAIL-SHOCK. 배율 1 이면 90% 로 PASS 입니다.'],
+    ['저장', '배율은 설정에 들어가 이 브라우저에 저장되고, 전체 백업(JSON)·이벤트 결과 CSV/Excel(w_stab·w_shock·w_resp·overall_score 열)에 함께 나갑니다. Zone 별 배율 값은 제출 자료에 없어 기본 1 로 두었습니다 — 실제 값은 시험팀이 정합니다.']],
+    src: '출처: 2026-09-29 수강생 추가 요청 4번, 기획서 11장, 코드(judgeEvent·zoneWeights)' };
+  App.WEIGHT_HELP = WEIGHT_HELP;
+  var W_COLS = [['stab', '안정도 (ΔPitch)'], ['shock', '충격지수 (Shock Index)'], ['resp', '응답성']];
+  App.W_COLS = W_COLS;
   var helpN = 0;
   function helpIcon(title, hp) {
     if (!hp) return '';
@@ -223,6 +235,9 @@
     }
   }
 
+  App.helpIcon = helpIcon;
+  App.bindHelp = bindHelp;
+
   App.pages.settings = function (main) {
     var s = App.S();
     var h = '<div class="page-head"><h1>설정 · 데이터</h1></div><div class="alert info">아래 기본값은 모두 <b>가정</b>입니다. 제출자의 실제 사양·로그·기준을 받으면 이 화면에서 바꿉니다. 바꾼 설정은 이 브라우저에 저장되고 백업 파일에도 들어갑니다.</div>';
@@ -233,6 +248,16 @@
         return '<label class="field"><span>' + esc(f[2]) + '</span><input class="inp" ' + (f[3] === 'text' ? 'type="text"' : 'type="number" step="any"') + ' data-set="' + f[0] + ':' + f[1] + '" value="' + esc(v == null ? '' : v) + '"></label>';
       }).join('') + '</div></div>';
     });
+    h += '<div class="card"><h2 class="help-head"><span>Zone별 점수 배율 (종합 판정)</span>' + helpIcon('Zone별 점수 배율', WEIGHT_HELP) + '</h2>' +
+      '<p class="note">이벤트가 난 암 위치 Zone 에 따라 안정도·충격지수·응답성 측정값에 곱할 배율입니다. 모두 1 이면 배율을 넣기 전과 같은 판정입니다. 1 보다 크게 하면 그 Zone 에서 더 엄하게 봅니다.' + (L.isDefaultWeights(s) ? '' : ' <b>지금은 기본값(1)과 다른 배율이 있습니다.</b>') + '</p>' +
+      '<div class="table-wrap"><table class="list" id="zwTable"><thead><tr><th>Zone (암 위치)</th>' + W_COLS.map(function (c) { return '<th class="num">' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      L.ZONES.map(function (z) {
+        var w = s.zoneWeight[z.id];
+        return '<tr><td><b>' + z.label + '</b> <small class="note">' + z.range + '</small></td>' + W_COLS.map(function (c) {
+          return '<td class="num"><input class="inp' + (w[c[0]] !== 1 ? ' changed' : '') + '" type="number" min="0" max="' + L.WEIGHT_MAX + '" step="0.05" data-zw="' + z.id + ':' + c[0] + '" value="' + w[c[0]] + '" aria-label="' + esc(z.label + ' ' + c[1] + ' 배율') + '"></td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div class="btn-row" style="margin-top:8px"><button class="btn" id="zwReset">배율 모두 1 로</button></div></div>';
     h += '<div class="btn-row" style="margin-bottom:16px"><button class="btn" id="setDefault">설정만 기본값으로</button></div>';
     h += '<div class="card"><h2 class="help-head"><span>데이터</span>' + helpIcon('데이터', DATA_HELP) + '</h2><p class="note">파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 한 파일로 백업하고 되살립니다. 로그 원본은 들어가지 않습니다.</p><div class="btn-row">' +
       '<button class="btn" id="backup">전체 백업 내보내기 (JSON)</button>' + App.fileInput('restoreFile', '.json', '백업 가져오기') +
@@ -252,6 +277,14 @@
         App.save(); App.toast('저장했습니다 — 분석 결과는 「다시 분석」 해야 반영됩니다');
       });
     });
+    main.querySelectorAll('[data-zw]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var p = el.getAttribute('data-zw').split(':');
+        if (!App.setWeight(+p[0], p[1], el.value)) { App.render(); return; }
+        App.render();
+      });
+    });
+    main.querySelector('#zwReset').addEventListener('click', function () { s.zoneWeight = L.defaultZoneWeights(); App.save(); App.toast('배율을 모두 1 로 되돌렸습니다'); App.render(); });
     main.querySelector('#setDefault').addEventListener('click', function () { App.st.settings = L.defaultSettings(); App.st.settings.user = s.user; App.save(); App.render(); });
     main.querySelector('#backup').addEventListener('click', function () { var o = JSON.parse(JSON.stringify(App.st)); o._type = 'data09-09 backup'; o._at = App.nowStr(); App.downloadJson('CurrentRampCal_백업', o); });
     main.querySelector('#restoreFile').addEventListener('change', function (e) {

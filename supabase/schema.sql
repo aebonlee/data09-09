@@ -19,6 +19,7 @@
 --    sensory_label        기준 시험원 감성 라벨 DB
 --    acceptance_criteria  Zone×방향×Start/Stop 허용 범위                   (파라미터 16개)
 --    mapping_profile      Channel Mapping Profile (이름별 버전)
+--    zone_score_weight    Zone별 점수 배율 — 안정도·충격지수·응답성 (Zone 4개, 2026-09-29 추가)
 --
 --  권한 원칙 : 모든 행은 만든 사람(owner_id = auth.uid())만 보고 고칩니다.
 --              기록성 표는 INSERT·SELECT 만 열고 UPDATE·DELETE 는 막습니다.
@@ -156,6 +157,24 @@ create table if not exists public.mapping_profile (
   constraint mapping_profile_uniq unique (owner_id, profile_id, version)
 );
 
+-- Zone별 점수 배율 (2026-09-29 수강생 추가 요청 4번) — localStorage 의 settings.zoneWeight
+-- 측정값 × 배율 을 허용 상한과 비교한다. 1 = 배율 없음(기본값, 배율 도입 전과 같은 판정).
+-- 도구가 받는 범위(0~10)를 CHECK 로도 막는다. 사용자마다 Zone 1~4 네 행.
+-- 이 표는 2026-09-29 에 추가했다. 이미 schema.sql 을 한 번 실행한 프로젝트도
+-- 이 파일 전체를 다시 실행하면 표·트리거·정책·권한이 함께 붙는다(재실행 안전).
+create table if not exists public.zone_score_weight (
+  id            bigint generated always as identity primary key,
+  owner_id      uuid not null default auth.uid(),
+  zone          int  not null check (zone between 1 and 4),
+  stab_weight   numeric not null default 1 check (stab_weight  between 0 and 10),   -- 안정도 (ΔPitch)
+  shock_weight  numeric not null default 1 check (shock_weight between 0 and 10),   -- 충격지수 (Shock Index)
+  resp_weight   numeric not null default 1 check (resp_weight  between 0 and 10),   -- 응답성
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  -- upsert onConflict = 'owner_id,zone'
+  constraint zone_score_weight_uniq unique (owner_id, zone)
+);
+
 -- ----------------------------------------------------------------------------
 -- 2. 함수 · 트리거
 --
@@ -174,7 +193,7 @@ $fn$;
 do $trg$
 declare t text;
 begin
-  foreach t in array array['workspace', 'sensory_label', 'acceptance_criteria', 'mapping_profile']
+  foreach t in array array['workspace', 'sensory_label', 'acceptance_criteria', 'mapping_profile', 'zone_score_weight']
   loop
     execute format('drop trigger if exists %I on public.%I', t || '_updated_at', t);
     execute format('create trigger %I before update on public.%I for each row execute function public.set_updated_at()',
@@ -193,12 +212,13 @@ alter table public.change_log          enable row level security;
 alter table public.sensory_label       enable row level security;
 alter table public.acceptance_criteria enable row level security;
 alter table public.mapping_profile     enable row level security;
+alter table public.zone_score_weight   enable row level security;
 
 -- 고치고 지울 수 있는 표 — 네 동작 모두 본인 행만
 do $rls$
 declare t text;
 begin
-  foreach t in array array['workspace', 'sensory_label', 'acceptance_criteria', 'mapping_profile']
+  foreach t in array array['workspace', 'sensory_label', 'acceptance_criteria', 'mapping_profile', 'zone_score_weight']
   loop
     execute format('drop policy if exists %I on public.%I', t || '_select', t);
     execute format('drop policy if exists %I on public.%I', t || '_insert', t);
@@ -238,11 +258,13 @@ $rls$;
 -- ----------------------------------------------------------------------------
 
 revoke all on public.workspace, public.calibration_version, public.change_log,
-              public.sensory_label, public.acceptance_criteria, public.mapping_profile
+              public.sensory_label, public.acceptance_criteria, public.mapping_profile,
+              public.zone_score_weight
   from anon;
 
 grant select, insert, update, delete
-  on public.workspace, public.sensory_label, public.acceptance_criteria, public.mapping_profile
+  on public.workspace, public.sensory_label, public.acceptance_criteria, public.mapping_profile,
+     public.zone_score_weight
   to authenticated;
 
 revoke update, delete, truncate on public.calibration_version, public.change_log from authenticated;

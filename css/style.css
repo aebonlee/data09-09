@@ -223,3 +223,21 @@ ul.msgs li.info { color: var(--muted); }
 .info-tip dt:first-child { margin-top: 0; }
 .info-tip dd { margin: 1px 0 0; }
 .info-tip .src { display: block; color: #b9c3cf; font-size: .78rem; margin-top: 6px; }
+
+/* 결과 표: 머리줄 고정 + 표 안 스크롤 (2026-09-29 오전 2차 요청 5번)
+   세로·가로 스크롤을 모두 이 상자 하나가 맡습니다. 그래서 좁은 화면의 가로 스크롤과 겹치지 않고,
+   sticky 머리줄(thead 통째)의 기준도 이 상자가 됩니다. 머리줄 아래 선은 border-collapse 에서 스크롤과 함께
+   사라지므로 box-shadow 로 그립니다. */
+.table-wrap.scroll-y { max-height: min(60vh, 460px); overflow: auto; }
+.table-wrap.scroll-y > table.list > thead { position: sticky; top: 0; z-index: 2; }
+.table-wrap.scroll-y > table.list > thead th { background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--line); }
+@media (max-width: 640px) { .table-wrap.scroll-y { max-height: 70vh; } }
+
+/* Zone별 점수 배율 (2026-09-29 오전 2차 요청 4번) */
+.inp.changed { border-color: var(--primary); background: #eef4fc; font-weight: 700; }
+.score-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .85rem; }
+.zw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 6px 0 10px; font-size: .88rem; }
+.zw-field { display: inline-flex; align-items: center; gap: 4px; }
+.zw-field span { color: var(--muted); white-space: nowrap; }
+.zw-field .inp { width: 5.5em; min-height: 32px; padding: 3px 6px; }
+#zwTable .inp { width: 6em; text-align: right; }

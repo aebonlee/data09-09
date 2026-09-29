@@ -11,6 +11,9 @@ const v1 = Smp.sampleSet(), v2 = { ...v1, UP_3_stop: 120, UP_4_stop: 120, DOWN_1
 const log1 = Smp.sampleLog(v1, 11), log2 = Smp.sampleLog(v2, 23);
 write('예시데이터_시험로그1_V001.csv', L.toCsv(log1[0], log1.slice(1)));
 write('예시데이터_시험로그2_V002.csv', L.toCsv(log2[0], log2.slice(1)));
+// 실제 로그(2026-09-29 메일)와 같은 열 순서의 가상 로그. 실제 로그 원본은 실측 데이터라 리포에 넣지 않습니다
+const log3 = Smp.realOrderLog(v2, 31);
+write('예시데이터_시험로그3_실제열순서.csv', L.toCsv(log3[0], log3.slice(1)));
 write('예시데이터_CalibrationSet_V001.csv', L.toCsv(L.SET_HEADER, L.setToRows(v1, s)));
 const labels = Smp.sampleLabels(s);
 write('예시데이터_라벨DB.csv', L.toCsv(L.LABEL_FIELDS, labels.map(l => L.LABEL_FIELDS.map(k => l[k]))));

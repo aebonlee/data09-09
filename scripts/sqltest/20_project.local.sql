@@ -57,6 +57,13 @@ begin
   values ('UP_1_start', -0.5, 0.5, 1.2, 0.8);
   insert into public.mapping_profile (profile_id, name, version, mode)
   values ('MP-001', '시험장비 A', 1, 'split');
+  insert into public.zone_score_weight (zone) values (1), (2), (3), (4);
+  update public.zone_score_weight set shock_weight = 1.2 where zone = 1;
+
+  perform public._assert_eq((select count(*) from public.zone_score_weight where stab_weight = 1 and resp_weight = 1),
+    4::bigint, 'Zone 배율 기본값은 1 이다 (배율 도입 전과 같은 판정)');
+  perform public._assert_eq((select shock_weight from public.zone_score_weight where zone = 1), 1.2::numeric,
+    'A 는 자기 Zone 배율을 고칠 수 있다');
 
   perform public._assert_eq((select owner_id from public.workspace),
     '11111111-1111-1111-1111-111111111111'::uuid, 'owner_id 기본값이 auth.uid() 로 채워진다');
@@ -89,8 +96,15 @@ begin
   perform public._assert_eq(
     (select count(*) from public.workspace) + (select count(*) from public.calibration_version)
     + (select count(*) from public.change_log) + (select count(*) from public.sensory_label)
-    + (select count(*) from public.acceptance_criteria) + (select count(*) from public.mapping_profile),
-    0::bigint, 'B 에게는 A 의 행이 6개 표 어디에서도 보이지 않는다');
+    + (select count(*) from public.acceptance_criteria) + (select count(*) from public.mapping_profile)
+    + (select count(*) from public.zone_score_weight),
+    0::bigint, 'B 에게는 A 의 행이 7개 표 어디에서도 보이지 않는다');
+
+  update public.zone_score_weight set stab_weight = 9;
+  get diagnostics n = row_count;
+  perform public._assert_eq(n, 0::bigint, 'B 의 UPDATE 는 A 의 Zone 배율에 닿지 않는다');
+  -- UNIQUE 는 사용자별 — B 도 자기 Zone 1 을 가질 수 있다
+  insert into public.zone_score_weight (zone) values (1);
 
   update public.sensory_label set memo = 'B가 고침' where label_id = 'L0001';
   get diagnostics n = row_count;
@@ -131,6 +145,9 @@ begin
   perform public._assert_eq((select count(*) from public.acceptance_criteria
       where owner_id = '11111111-1111-1111-1111-111111111111'), 1::bigint,
     'B 의 시도 뒤에도 A 의 허용 범위는 그대로다');
+  perform public._assert_eq((select count(*) from public.zone_score_weight
+      where owner_id = '11111111-1111-1111-1111-111111111111' and stab_weight = 1), 4::bigint,
+    'B 의 시도 뒤에도 A 의 Zone 배율은 그대로다');
 end $t$;
 
 -- ----------------------------------------------------------------------------
@@ -142,7 +159,7 @@ set local role anon;
 do $t$
 declare t text;
 begin
-  foreach t in array array['workspace','calibration_version','change_log','sensory_label','acceptance_criteria','mapping_profile']
+  foreach t in array array['workspace','calibration_version','change_log','sensory_label','acceptance_criteria','mapping_profile','zone_score_weight']
   loop
     perform public._assert_raises(format('select * from public.%I', t), '42501', 'anon 은 ' || t || ' 를 읽을 수 없다');
   end loop;
@@ -200,7 +217,7 @@ do $t$
 begin
   perform public._assert_eq((select count(*) from pg_policy p join pg_class c on c.oid = p.polrelid
      join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public'),
-    20::bigint, '정책 수가 20개다 (4개 표 × 4 + 기록성 2개 표 × 2, 재실행해도 늘지 않는다)');
+    24::bigint, '정책 수가 24개다 (5개 표 × 4 + 기록성 2개 표 × 2, 재실행해도 늘지 않는다)');
 end $t$;
 
 -- ----------------------------------------------------------------------------
@@ -241,6 +258,14 @@ begin
     '23514', 'Current 모드는 split/single 만 받는다');
   perform public._assert_raises($s$insert into public.workspace (settings) values ('{}')$s$,
     '23505', '작업 공간은 사용자당 한 행이다');
+  perform public._assert_raises($s$insert into public.zone_score_weight (zone) values (5)$s$,
+    '23514', 'Zone 배율의 Zone 은 1~4 만 받는다');
+  perform public._assert_raises($s$insert into public.zone_score_weight (zone) values (2)$s$,
+    '23505', '같은 사용자의 같은 Zone 배율 중복은 UNIQUE 가 막는다');
+  perform public._assert_raises($s$update public.zone_score_weight set resp_weight = -0.1 where zone = 3$s$,
+    '23514', 'Zone 배율은 음수를 받지 않는다');
+  perform public._assert_raises($s$update public.zone_score_weight set stab_weight = 10.5 where zone = 3$s$,
+    '23514', 'Zone 배율은 10 을 넘지 않는다');
 end $t$;
 commit;
 
@@ -284,6 +309,7 @@ delete from public.sensory_label;
 delete from public.acceptance_criteria;
 delete from public.mapping_profile;
 delete from public.workspace;
+delete from public.zone_score_weight;
 delete from auth.users where email in ('a@example.com', 'b@example.com');
 
 do $t$ begin raise notice ''; raise notice '전부 통과했습니다.'; end $t$;

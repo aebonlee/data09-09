@@ -65,7 +65,15 @@
   App.refVersion = function () { return App.st.versions.filter(function (v) { return v.id === App.st.refVersionId; })[0] || null; };
 
   // ── 판정·추천 도우미 ──────────────────────────────────────────
-  App.judge = function (ev) { return L.judgeEvent(ev.f, App.st.criteria[ev.key], App.S()); };
+  // Zone별 점수 배율 한 칸 바꾸기 — 설정 화면·Calibration 판정표가 함께 씁니다. 잘못된 값이면 false
+  App.setWeight = function (zone, key, raw) {
+    var v = L.num(raw);
+    if (!L.isNum(v) || v < 0 || v > L.WEIGHT_MAX) { App.toast('배율은 0 ~ ' + L.WEIGHT_MAX + ' 사이 숫자로 넣으세요', true); return false; }
+    App.S().zoneWeight[zone][key] = v; App.save();
+    App.toast('Zone ' + zone + ' 배율을 저장했습니다 — 판정에 바로 반영됩니다');
+    return true;
+  };
+  App.judge = function (ev) { return L.judgeEvent(ev.f, App.st.criteria[ev.key], App.S(), ev.zone); };
   App.activeResult = function () { var lg = App.logs[App.activeLog]; return lg && lg.result && lg.result.ok ? lg.result : null; };
   // 전류 % 보정이 없는 로그를 보고 있으면 %/sec 비교·추천을 막습니다 (제출 기획서 4.3, AC-16)
   App.recBlocked = function () {
@@ -162,13 +170,14 @@
   };
 
   // ── 로그 추가 (Channel Mapping 은 page-log.js) ───────────────────
-  App.addLog = function (name, rows) {
+  // opt.auto = true 면 저장된 Profile 이 있어도 자동추천으로 시작합니다(처음 보는 로그를 올린 것과 같은 흐름)
+  App.addLog = function (name, rows, opt) {
     var tb = L.tableFromRows(rows);
     if (!tb.header.length || !tb.data.length) throw new Error(name + ': 머리행 또는 데이터가 없습니다');
     var stats = L.columnStats(tb);
     var lg = { name: name, table: tb, stats: stats, mapping: null, profileChanges: [], result: null };
     // 같은 헤더 구조의 Mapping Profile 이 있으면 제안 상태로 되살리고, 없으면 자동추천
-    var pr = App.bestProfile(stats);
+    var pr = opt && opt.auto ? null : App.bestProfile(stats);
     if (pr) { var ap = L.applyProfile(pr, stats); lg.mapping = ap.mapping; lg.profileChanges = ap.changes; lg.mappingFrom = 'Profile 「' + pr.name + '」 v' + pr.version + ' 에서 제안'; }
     else { lg.mapping = L.recommendMapping(stats, 'split'); lg.mappingFrom = '자동추천'; }
     App.logs.push(lg); App.activeLog = App.logs.length - 1;
@@ -205,6 +214,8 @@
     App.logs = [];
     App.addLog('예시데이터_시험로그1_V001.csv', Smp.sampleLog(v1, 11));
     App.addLog('예시데이터_시험로그2_V002.csv', Smp.sampleLog(v2, 23));
+    // 실제 로그의 열 순서로 만든 가상 로그 — Profile 없이 자동추천부터 시작합니다 (2026-09-29 실제 로그 확인)
+    App.addLog('예시데이터_시험로그3_실제열순서.csv', Smp.realOrderLog(v2, 31), { auto: true });
     App.activeLog = 0;
     App.save();
   };

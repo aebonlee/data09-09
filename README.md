@@ -6,7 +6,7 @@
 |---|---|
 | 제출자 | 이영우 |
 | 과정 | 현장 데이터 수집·디지털화 전문가과정 1차수 (2026) |
-| 진행 단계 | 1단계 개발 완료 (2026-09-28) — https://aebonlee.github.io/data09-09/ |
+| 진행 단계 | 1단계 개발 완료 (2026-09-28), 2026-09-29 추가 요청 5건 반영 — https://aebonlee.github.io/data09-09/ |
 | 다음 개발 | 2단계 — 실제 `sample data.csv`·라벨로 Threshold·Shock Index·허용 범위 확정, 실제 파라미터 사양(명칭·Min/Max·ECU 환산) 반영, 학습 기반 추천·MDF/CAN 로그 Import |
 
 ## 이 저장소 이용 안내
@@ -51,7 +51,8 @@
 4. 「Calibration Set 저장」으로 버전을 남기고, 「Parameter Export」로 CSV·Excel·JSON 을 내보내 장비에 적용합니다(ECU 직접 Write 없음). 재시험 로그를 다시 올려 비교합니다.
 
 - 파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정은 **이 브라우저(localStorage)에만** 저장됩니다. 로그 원본은 저장하지 않으니 다시 열면 파일을 다시 올립니다. 보관·이동은 「설정·데이터」의 전체 백업(JSON)으로 합니다.
-- 예시 파일(`samples/`): `예시데이터_시험로그1_V001.csv`, `예시데이터_시험로그2_V002.csv`, `예시데이터_라벨DB.csv`, `예시데이터_CalibrationSet_V001.csv`. **모두 합성(가상) 데이터**입니다. 로그의 열 이름만 제출 기획서 4.3 의 `sample data.csv` 헤더 8개를 그대로 썼고 값은 단순 가상 물리 모델로 만들었습니다. 라벨은 가상 규칙으로 붙인 것이라 실제 감성 기준이 아닙니다.
+- 예시 파일(`samples/`): `예시데이터_시험로그1_V001.csv`, `예시데이터_시험로그2_V002.csv`, `예시데이터_시험로그3_실제열순서.csv`(2026-09-29 메일로 받은 실제 로그와 같은 열 이름·순서 — 값은 가상, 「예시 데이터 불러오기」에서는 자동추천부터 시작), `예시데이터_라벨DB.csv`, `예시데이터_CalibrationSet_V001.csv`. **모두 합성(가상) 데이터**입니다. 로그의 열 이름만 제출 기획서 4.3 의 `sample data.csv` 헤더 8개를 그대로 썼고 값은 단순 가상 물리 모델로 만들었습니다. 라벨은 가상 규칙으로 붙인 것이라 실제 감성 기준이 아닙니다.
+- 수강생이 보낸 **실제 로그 원본은 실측 데이터라 이 리포에 넣지 않았습니다.** 도구에 올려 본 결과(자동 매핑·이벤트 28개)는 기획서 11장에 있습니다.
 - 설정 화면의 기본값(파라미터 Min/Max·Step, 검출 Threshold, Shock Index 식의 기준값·가중치, CAUTION 폭 등)은 모두 **가정**입니다. 실제 사양·로그를 받으면 바꿉니다.
 - 로직 테스트: `node test/logic.test.mjs` (의존성 없음) · 예시 파일 다시 만들기: `node scripts/make-samples.js`
 
@@ -75,6 +76,8 @@
 | 이벤트 Feature · 판정 | 완료 | Response Delay/Stop Response Time, 실측 Ramp, ΔP·dP/dt, Pitch·ΔPitch·dPitch/dt·d²Pitch/dt², Settling, Shock Index(가정 식). 판정표는 스케치대로 안정도·충격지수·응답성·종합. DOWN Pitch 별도 표시 (AC-05) |
 | 기준 시험원 Profile · 라벨 DB | 완료 | 16개 파라미터별 허용 범위 입력·가져오기·내보내기, 이벤트 라벨 기록(충격감·Pitch감·응답성·전체·메모·시험 Set), 라벨 파일 가져오기/내보내기, Accepted 라벨로 허용 범위 만들기(ΔPitch·Shock Index·응답 시간 상한 — 안정도 하한은 2026-09-29 요청으로 삭제) |
 | 차트 커서 (2026-09-29 요청) | 완료 | 로그 탭 트랙·Calibration 탭 이벤트 트랙·Ramp Profile 에 Tracking(수직 커서 1개, 모든 트랙 동기화)·Value Difference(커서 A·B, Δy·Δx) 모드. 마우스·터치 드래그, 화살표 키, 값은 선형 보간 |
+| Zone별 점수 배율 (2026-09-29 2차 요청) | 완료 | 설정 화면 표(Zone 1~4 × 안정도·충격지수·응답성)와 Calibration 판정표 위 입력칸. 측정값 × 배율을 상한과 비교, 항목 점수 = 적용값 ÷ 상한 × 100, 종합 점수 = 가장 큰 항목 점수. 기본 1 = 이전과 같은 판정(테스트로 보장). 백업·이벤트 CSV/Excel 에 포함, `supabase/schema.sql` 의 `zone_score_weight` |
+| 결과 표 머리줄 고정 (2026-09-29 2차 요청) | 완료 | 로그 탭의 불러온 로그·Channel Mapping·이벤트 결과 표와 라벨 DB·변경 이력 표는 표 안에서 스크롤하고 머리줄은 고정. 좁은 화면 가로 스크롤과 함께 동작 |
 | 설정 설명 말풍선 (2026-09-29 요청) | 완료 | 설정·데이터 화면 소제목 7곳 옆 i 아이콘 — 마우스 올림·키보드 초점·모바일 탭으로 파라미터 뜻 표시(기획서·코드 정의에서 옮김) |
 | 판정 상태 | 완료 | PASS / CAUTION / FAIL-SHOCK / FAIL-PITCH / FAIL-SLOW / NO DATA, Safety Limit 우선(초과 시 최종 Confirm 차단) (AC-06) |
 | 추천 Side Panel (Rule 기반) | 완료 | Accepted 라벨 ramp 값의 상위 백분위 쪽으로, 1회 변화폭·Min/Max·Step 안에서. 근거 부족은 「추천 불가/데이터 부족」, 「적용」 전 값 불변, 전류 % 보정 없으면 차단 (AC-07, AC-09) |

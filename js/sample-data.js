@@ -11,6 +11,11 @@
   var HEADERS = ['Time[s]', 'LASP::FFD3_BoomAnglePercentage', 'LOGE_::EPPR_ArmUp[mA]', 'LOGE_::EPPR_ArmDown[mA]',
     'LABHRP::FFD2_ArmCylinderHeadPressure', 'Body_IMU_Angle_SQ::PitchAngle[deg]', 'EEC1::EngSpeed[rpm]', 'LOGI_::AngleSensorVoltage_Arm[mV]'];
 
+  // 수강생이 2026-09-29 메일로 보낸 실제 로그의 열 순서 (열 이름은 위와 같고 순서만 다릅니다).
+  // 실제 로그 원본은 실측 데이터라 리포에 넣지 않고, 이 순서로 만든 가상 로그로 같은 흐름을 재현합니다.
+  var REAL_ORDER = ['Time[s]', 'EEC1::EngSpeed[rpm]', 'Body_IMU_Angle_SQ::PitchAngle[deg]', 'LASP::FFD3_BoomAnglePercentage',
+    'LABHRP::FFD2_ArmCylinderHeadPressure', 'LOGI_::AngleSensorVoltage_Arm[mV]', 'LOGE_::EPPR_ArmUp[mA]', 'LOGE_::EPPR_ArmDown[mA]'];
+
   // 예시 전용 가상 보정값: 이 합성 데이터는 100 mA(대기) = 0%, 650 mA = 100% 로 만들었습니다
   var SAMPLE_CAL = { i0: 100, i100: 650 };
 
@@ -102,6 +107,18 @@
   ];
   function sampleLog(values, seed) { return simulate(values, LOG_MOVES, { seed: seed || 11 }); }
 
+  // 실제 로그와 같은 모양의 동작: 조금씩 끊어 올려 4 Zone 을 모두 지난 뒤, 다시 끊어 내립니다 (~65 s)
+  var STAGED_MOVES = [
+    { dir: 'UP', to: 17, idle: 7 }, { dir: 'UP', to: 40, idle: 2 }, { dir: 'UP', to: 46 }, { dir: 'UP', to: 66 }, { dir: 'UP', to: 81 }, { dir: 'UP', to: 91 },
+    { dir: 'DOWN', to: 88, idle: 7 }, { dir: 'DOWN', to: 72, idle: 2 }, { dir: 'DOWN', to: 53, idle: 6 }, { dir: 'DOWN', to: 40 }, { dir: 'DOWN', to: 28 }, { dir: 'DOWN', to: 15 }, { dir: 'DOWN', to: 6, idle: 2 }
+  ];
+  // 행을 실제 로그의 열 순서로 바꿉니다
+  function reorder(rows, order) {
+    var idx = order.map(function (h) { return rows[0].indexOf(h); });
+    return rows.map(function (r) { return idx.map(function (i) { return r[i]; }); });
+  }
+  function realOrderLog(values, seed) { return reorder(simulate(values, STAGED_MOVES, { seed: seed || 31 }), REAL_ORDER); }
+
   // 예시 채널맵 — 실제 역할·단위가 아니라 이 합성 데이터에 맞춘 값입니다
   function sampleProfile() {
     var m = L.emptyMapping('split');
@@ -165,7 +182,7 @@
     return out;
   }
 
-  var api = { HEADERS: HEADERS, SAMPLE_CAL: SAMPLE_CAL, VIRTUAL_EXPERT: VIRTUAL_EXPERT, sampleSet: sampleSet, simulate: simulate, sampleLog: sampleLog,
+  var api = { HEADERS: HEADERS, REAL_ORDER: REAL_ORDER, realOrderLog: realOrderLog, reorder: reorder, SAMPLE_CAL: SAMPLE_CAL, VIRTUAL_EXPERT: VIRTUAL_EXPERT, sampleSet: sampleSet, simulate: simulate, sampleLog: sampleLog,
     sampleProfile: sampleProfile, mappingFromProfile: mappingFromProfile, sampleLabels: sampleLabels, virtualLabel: virtualLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CRSample = api;

@@ -53,8 +53,42 @@
       cautionPct: 10,         // 허용 한계 안쪽 이 % 이내면 CAUTION
       safety: { pressureMax: null, pitchAbsMax: null },
       recommend: { minLabels: 3, percentile: 75 },
+      // Zone별 점수 배율 (2026-09-29 오전 2차 요청). 1 이면 예전 판정과 같습니다
+      zoneWeight: defaultZoneWeights(),
       user: ''
     };
+  }
+  // ── Zone별 점수 배율 ─────────────────────────────────────────────
+  // 측정값에 배율을 곱한 값을 허용 상한과 비교합니다. 1 보다 크면 그 Zone 에서 그 항목을 더 엄하게,
+  // 1 보다 작으면 느슨하게, 0 이면 그 항목을 판정에서 빼는 것과 같습니다.
+  var WEIGHT_ITEMS = ['stab', 'shock', 'resp'];
+  var WEIGHT_MAX = 10;
+  function defaultZoneWeights() {
+    var o = {};
+    ZONES.forEach(function (z) { o[z.id] = { stab: 1, shock: 1, resp: 1 }; });
+    return o;
+  }
+  // 저장본·백업·가져온 값을 정리합니다. 숫자가 아니거나 0~10 밖이면 1 로 둡니다
+  function normalizeZoneWeights(src) {
+    var o = defaultZoneWeights();
+    if (!src || typeof src !== 'object') return o;
+    ZONES.forEach(function (z) {
+      var r = src[z.id] || src[String(z.id)];
+      if (!r || typeof r !== 'object') return;
+      WEIGHT_ITEMS.forEach(function (k) { var v = num(r[k]); if (isNum(v) && v >= 0 && v <= WEIGHT_MAX) o[z.id][k] = v; });
+    });
+    return o;
+  }
+  function zoneWeights(s, zone) {
+    var w = s && s.zoneWeight && s.zoneWeight[zone];
+    return {
+      stab: w && isNum(w.stab) ? w.stab : 1,
+      shock: w && isNum(w.shock) ? w.shock : 1,
+      resp: w && isNum(w.resp) ? w.resp : 1
+    };
+  }
+  function isDefaultWeights(s) {
+    return ZONES.every(function (z) { var w = zoneWeights(s, z.id); return w.stab === 1 && w.shock === 1 && w.resp === 1; });
   }
   function mergeSettings(saved) {
     var d = defaultSettings();
@@ -65,6 +99,7 @@
         Object.keys(d[k]).forEach(function (j) { if (saved[k][j] !== undefined) d[k][j] = saved[k][j]; });
       } else d[k] = saved[k];
     });
+    d.zoneWeight = normalizeZoneWeights(saved.zoneWeight);
     return d;
   }
 
@@ -276,19 +311,28 @@
       var row = { header: '', role: '', unit: '', confirmed: false, reason: '', candidates: [], ambiguous: false };
       m.rows[sg.id] = row;
       if (sg.noAuto) { row.reason = '자동추천 없음 — 필요하면 직접 선택'; return; }
-      var cands = [];
-      stats.forEach(function (st) { if (taken[st.header]) return; var sc = scoreHeader(sg, st); if (sc && sc.score > 0) cands.push({ header: st.header, score: sc.score, why: sc.why }); });
+      var cands = [], unitOff = [];
+      stats.forEach(function (st) {
+        if (taken[st.header]) return;
+        var sc = scoreHeader(sg, st);
+        if (sc && sc.score > 0) cands.push({ header: st.header, score: sc.score, why: sc.why });
+        else if (sc && st.unit && sg.units.indexOf(st.unit) < 0) unitOff.push(st.header);
+      });
       cands.sort(function (a, b) { return b.score - a.score; });
       row.candidates = cands.map(function (c) { return c.header; });
-      if (!cands.length) { row.reason = '맞는 헤더 없음 — 미매핑'; return; }
+      // 이름은 맞는데 단위가 달라 뺀 열(예: 실제 로그의 AngleSensorVoltage_Arm[mV] 는 Arm % 가 아니라 원시 전압)
+      // 은 자동 선택하지 않고 이유에 남깁니다 — 어느 쪽이 맞는지는 사람이 확인합니다 (2026-09-29 실제 로그 확인)
+      row.unitRejected = unitOff;
+      var offNote = unitOff.length ? ' · 이름은 맞지만 단위가 달라 뺀 열: ' + unitOff.join(', ') + ' — 어느 열이 맞는지 확인 필요' : '';
+      if (!cands.length) { row.reason = '맞는 헤더 없음 — 미매핑' + offNote; return; }
       if (cands.length > 1 && cands[0].score === cands[1].score) {
         row.ambiguous = true;
-        row.reason = '확인 필요 — 같은 점수 후보 ' + cands.filter(function (c) { return c.score === cands[0].score; }).map(function (c) { return c.header; }).join(', ');
+        row.reason = '확인 필요 — 같은 점수 후보 ' + cands.filter(function (c) { return c.score === cands[0].score; }).map(function (c) { return c.header; }).join(', ') + offNote;
         return;
       }
       var best = cands[0], st = stats.filter(function (x) { return x.header === best.header; })[0];
       row.header = best.header; taken[best.header] = true;
-      row.reason = '추천: ' + best.why.join(', ');
+      row.reason = '추천: ' + best.why.join(', ') + offNote;
       row.unit = st.unit && sg.units.indexOf(st.unit) >= 0 ? st.unit : (sg.units.length === 1 ? sg.units[0] : '');
       if (sg.kind === 'current') row.role = guessRole(best.header);
     });
@@ -705,16 +749,32 @@
     return '—';
   }
   // 안정도(ΔPitch)는 상한만 봅니다. 예전에 저장한 stabMin 이 남아 있어도 판정에 쓰지 않습니다(2026-09-29 요청)
-  function judgeEvent(f, crit, s) {
+  // Zone별 점수 배율(2026-09-29 오전 2차 요청):
+  //   배율 적용값 = 측정값 × 배율(zone, 항목)   → 이 값을 허용 상한과 비교해 항목 판정(judgeItem)
+  //   항목 점수  = 배율 적용값 ÷ 상한 × 100   (한계 사용률 %, 100 초과 = FAIL, 100 − CAUTION 폭 초과 = CAUTION)
+  //   종합 점수  = 세 항목 점수 중 가장 큰 값 (가장 한계에 가까운 항목이 종합 판정을 정합니다)
+  // 배율이 모두 1 이면 배율 적용값 = 측정값이라 예전 판정과 똑같습니다. zone 을 안 주면 배율 1.
+  function judgeEvent(f, crit, s, zone) {
     crit = crit || {};
+    var w = zoneWeights(s, zone);
     var items = [
-      { id: 'stability', name: '안정도 (ΔPitch)', unit: '°', value: f.dPitch, lo: null, hi: crit.stabMax, fail: 'FAIL-PITCH' },
-      { id: 'shock', name: '충격지수 (Shock Index)', unit: '', value: f.shockIndex, lo: null, hi: crit.shockMax, fail: 'FAIL-SHOCK' },
-      { id: 'response', name: '응답성 (' + (f.decayT != null ? 'Stop Response Time' : 'Response Delay') + ')', unit: 's', value: f.response, lo: null, hi: crit.respMax, fail: 'FAIL-SLOW' }
+      { id: 'stability', wkey: 'stab', name: '안정도 (ΔPitch)', unit: '°', value: f.dPitch, lo: null, hi: crit.stabMax, fail: 'FAIL-PITCH' },
+      { id: 'shock', wkey: 'shock', name: '충격지수 (Shock Index)', unit: '', value: f.shockIndex, lo: null, hi: crit.shockMax, fail: 'FAIL-SHOCK' },
+      { id: 'response', wkey: 'resp', name: '응답성 (' + (f.decayT != null ? 'Stop Response Time' : 'Response Delay') + ')', unit: 's', value: f.response, lo: null, hi: crit.respMax, fail: 'FAIL-SLOW' }
     ];
-    items.forEach(function (it) { var r = judgeItem(it.value, it.lo, it.hi, s.cautionPct); it.state = r.state; it.why = r.why; it.crit = critText(it.lo, it.hi); });
+    items.forEach(function (it) {
+      it.weight = w[it.wkey];
+      it.weighted = isNum(it.value) ? it.value * it.weight : it.value; // 배율 1 이면 값이 한 비트도 바뀌지 않습니다
+      var r = judgeItem(it.weighted, it.lo, it.hi, s.cautionPct);
+      it.state = r.state; it.why = r.why;
+      if (it.weight !== 1 && (r.state === 'fail' || r.state === 'caution')) it.why = '배율 ×' + it.weight + ' 적용값 ' + round(it.weighted, 3) + ' — ' + r.why;
+      it.crit = critText(it.lo, it.hi);
+      it.score = isNum(it.weighted) && isNum(it.hi) && it.hi > 0 ? round(it.weighted / it.hi * 100, 1) : NaN;
+    });
+    var scores = items.map(function (i) { return i.score; }).filter(isNum);
+    var score = scores.length === items.length ? Math.max.apply(null, scores) : NaN;
     var reasons = [], status;
-    if (f.noData) return { status: 'NO DATA', items: items, reasons: [f.noData], safety: false };
+    if (f.noData) return { status: 'NO DATA', items: items, reasons: [f.noData], safety: false, score: NaN, weights: w };
     var sf = s.safety, safety = [];
     if (isNum(sf.pressureMax) && isNum(f.pPeak) && f.pPeak > sf.pressureMax) safety.push({ st: 'FAIL-SHOCK', msg: 'Safety Limit 초과: Head Pressure ' + f.pPeak + ' > ' + sf.pressureMax });
     if (isNum(sf.pitchAbsMax) && isNum(f.pitchAbs) && Math.abs(f.pitchAbs) > sf.pitchAbsMax) safety.push({ st: 'FAIL-PITCH', msg: 'Safety Limit 초과: |Pitch| ' + Math.abs(f.pitchAbs) + ' > ' + sf.pitchAbsMax });
@@ -734,7 +794,7 @@
       status = 'CAUTION';
       items.filter(function (i) { return i.state === 'caution'; }).forEach(function (i) { reasons.push(i.name + ' ' + i.why + ' — 반복시험 권장'); });
     } else status = 'PASS';
-    return { status: status, items: items, reasons: reasons, safety: safety.length > 0 };
+    return { status: status, items: items, reasons: reasons, safety: safety.length > 0, score: score, weights: w };
   }
 
   // ── 라벨 DB (제출 기획서 9장 저장 항목) ────────────────────────
@@ -850,12 +910,12 @@
     return { ok: true, values: values };
   }
   var EVENT_HEADER = ['no', 'event', 'time_s', 'direction', 'zone', 'arm_pct', 'parameter', 'response_s', 'ramp_measured', 'ramp_unit', 'p_before', 'p_peak', 'delta_p', 'dp_dt_max',
-    'pitch_abs', 'delta_pitch', 'pitch_p2p', 'dpitch_dt_max', 'd2pitch_max', 'settling_s', 'shock_index', 'status', 'reasons'];
+    'pitch_abs', 'delta_pitch', 'pitch_p2p', 'dpitch_dt_max', 'd2pitch_max', 'settling_s', 'shock_index', 'w_stab', 'w_shock', 'w_resp', 'overall_score', 'status', 'reasons'];
   function eventRows(events, judge) {
     return events.map(function (e) {
       var f = e.f, j = judge(e);
       return [e.no, e.type === 'start' ? 'Start' : 'Stop', round(e.t, 3), e.dir, e.zone, round(e.arm, 1), paramLabel(e.key), f.response, f.rampMeasured, f.curUnit ? f.curUnit + '/s' : '', f.pBefore, f.pPeak, f.dP, f.dpdtMax,
-        f.pitchAbs, f.dPitch, f.pitchP2P, f.dPitchMax, f.d2PitchMax, f.settling, f.shockIndex, j.status, j.reasons.join(' / ')];
+        f.pitchAbs, f.dPitch, f.pitchP2P, f.dPitchMax, f.d2PitchMax, f.settling, f.shockIndex, j.weights.stab, j.weights.shock, j.weights.resp, j.score, j.status, j.reasons.join(' / ')];
     });
   }
 
@@ -871,7 +931,7 @@
     recommendMapping: recommendMapping, applyProfile: applyProfile, mappingToProfile: mappingToProfile, calibrationState: calibrationState,
     validateMapping: validateMapping, qualityReport: qualityReport, buildSignals: buildSignals, fillGaps: fillGaps, smooth: smooth, derivative: derivative, deriveSignals: deriveSignals, derivationVersion: derivationVersion,
     detectEvents: detectEvents, idxAt: idxAt, interpAt: interpAt, cursorDiff: cursorDiff, fracToX: fracToX, eventFeatures: eventFeatures, measuredRamp: measuredRamp, settlingTime: settlingTime, shockIndex: shockIndex, analyze: analyze,
-    judgeItem: judgeItem, judgeEvent: judgeEvent, labelKey: labelKey, labelFromEvent: labelFromEvent, normalizeLabel: normalizeLabel, labelsFromTable: labelsFromTable,
+    judgeItem: judgeItem, judgeEvent: judgeEvent, WEIGHT_ITEMS: WEIGHT_ITEMS, WEIGHT_MAX: WEIGHT_MAX, defaultZoneWeights: defaultZoneWeights, normalizeZoneWeights: normalizeZoneWeights, zoneWeights: zoneWeights, isDefaultWeights: isDefaultWeights, labelKey: labelKey, labelFromEvent: labelFromEvent, normalizeLabel: normalizeLabel, labelsFromTable: labelsFromTable,
     criteriaFromLabels: criteriaFromLabels, recommend: recommend, recommendAll: recommendAll,
     setToRows: setToRows, setFromTable: setFromTable, eventRows: eventRows
   };

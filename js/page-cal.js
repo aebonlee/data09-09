@@ -210,11 +210,16 @@
     var h = '<div class="btn-row"><label class="field" style="min-width:18em"><span>이벤트</span><select class="inp" id="evSel">' + list.map(function (e) { return App.opt(e.no, '#' + e.no + ' ' + (e.type === 'start' ? 'Movement Start' : 'Movement Stop') + ' · ' + fmt(e.t, 2) + ' s · Arm ' + fmt(e.arm, 1) + '%', ev.no); }).join('') + '</select></label>' +
       '<button class="btn" id="labelBtn" style="align-self:flex-end">이 이벤트에 라벨 기록</button><a class="btn" href="#/profile" style="align-self:flex-end">기준 범위 편집</a></div>';
     h += '<div class="judge-grid"><div>';
-    h += '<div class="overall">종합 판정 ' + App.badge(j.status) + ' <span class="note">' + esc(L.STATUS[j.status].show) + '</span></div>';
+    var zw = App.S().zoneWeight[ev.zone], zl = L.ZONES[ev.zone - 1];
+    h += '<div class="overall help-head">종합 판정 ' + App.badge(j.status) + ' <span class="note">' + esc(L.STATUS[j.status].show) + '</span>' +
+      (L.isNum(j.score) ? ' <span class="score-pill">종합 점수 ' + fmt(j.score, 1) + '%</span>' : '') + App.helpIcon('종합 점수 · Zone 배율', App.WEIGHT_HELP) + '</div>';
     if (j.reasons.length) h += '<ul class="msgs">' + j.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
-    h += '<div class="table-wrap"><table class="list"><thead><tr><th>항목별 점수 (' + esc(L.paramLabel(ev.key)) + ')</th><th>기준 범위</th><th class="num">측정값</th><th>판정</th></tr></thead><tbody>' +
-      j.items.map(function (it) { return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.crit) + (it.unit ? ' ' + it.unit : '') + '</td><td class="num">' + fmt(it.value, 3) + '</td><td>' + App.itemBadge(it.state) + ' <small class="note">' + esc(it.why) + '</small></td></tr>'; }).join('') +
-      '<tr><td><b>종합 판정</b></td><td colspan="2">' + (crit && crit.source ? '<small class="note">기준 출처: ' + esc(crit.source) + '</small>' : (crit ? '' : '<small class="note">이 파라미터의 기준이 없습니다</small>')) + '</td><td>' + App.badge(j.status) + '</td></tr></tbody></table></div>';
+    h += '<div class="zw-row"><span><b>' + zl.label + ' (' + zl.range + ') 점수 배율</b></span>' + App.W_COLS.map(function (c) {
+      return '<label class="zw-field"><span>' + esc(c[1].replace(/ \(.*\)/, '')) + ' ×</span><input class="inp' + (zw[c[0]] !== 1 ? ' changed' : '') + '" type="number" min="0" max="' + L.WEIGHT_MAX + '" step="0.05" data-czw="' + c[0] + '" value="' + zw[c[0]] + '" aria-label="' + esc(zl.label + ' ' + c[1] + ' 배율') + '"></label>';
+    }).join('') + '<a href="#/settings" class="note">4 Zone 표 전체 보기</a></div>';
+    h += '<div class="table-wrap"><table class="list"><thead><tr><th>항목별 점수 (' + esc(L.paramLabel(ev.key)) + ')</th><th>기준 범위</th><th class="num">측정값</th><th class="num">배율</th><th class="num">적용값</th><th class="num">점수</th><th>판정</th></tr></thead><tbody>' +
+      j.items.map(function (it) { return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.crit) + (it.unit ? ' ' + it.unit : '') + '</td><td class="num">' + fmt(it.value, 3) + '</td><td class="num">×' + fmt(it.weight) + '</td><td class="num">' + fmt(it.weighted, 3) + '</td><td class="num">' + (L.isNum(it.score) ? fmt(it.score, 1) + '%' : '—') + '</td><td>' + App.itemBadge(it.state) + ' <small class="note">' + esc(it.why) + '</small></td></tr>'; }).join('') +
+      '<tr><td><b>종합 판정</b></td><td colspan="4">' + (crit && crit.source ? '<small class="note">기준 출처: ' + esc(crit.source) + '</small>' : (crit ? '' : '<small class="note">이 파라미터의 기준이 없습니다</small>')) + '</td><td class="num"><b>' + (L.isNum(j.score) ? fmt(j.score, 1) + '%' : '—') + '</b></td><td>' + App.badge(j.status) + '</td></tr></tbody></table></div>';
     h += '<div class="kv-grid">' + [
       ['설정 Ramp (' + L.EVENT_LABEL[ev.type] + ')', fmt(setV) + ' %/s'],
       ['실측 Ramp (10→90%)', fmt(f.rampMeasured, 1) + ' ' + unit + (f.curUnit === 'mA' ? ' — % 보정 없음, %/s 비교 불가' : '')],
@@ -234,6 +239,10 @@
     host.querySelector('#evSel').addEventListener('change', function (e) { App.sel.eventNo = +e.target.value; renderJudge(); var arm = document.getElementById('armHost'); if (arm) { arm.innerHTML = C.armSvg(App.sel.zone, App.sel.dir, currentEvent(r).arm); bindArm(); } });
     host.querySelectorAll('[data-edv]').forEach(function (el) { el.addEventListener('change', function () { evShow[el.getAttribute('data-edv')] = el.checked; renderJudge(); }); });
     host.querySelector('#labelBtn').addEventListener('click', function () { labelDialog(ev); });
+    App.bindHelp(host);
+    host.querySelectorAll('[data-czw]').forEach(function (el) {
+      el.addEventListener('change', function () { App.setWeight(ev.zone, el.getAttribute('data-czw'), el.value); renderJudge(); });
+    });
   }
 
   function labelDialog(ev) {

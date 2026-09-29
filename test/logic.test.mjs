@@ -289,4 +289,117 @@ console.log('차트 커서 — Tracking · Value Difference (09-29 요청)');
   });
 }
 
+
+console.log('Zone별 점수 배율 (2026-09-29 오전 2차 요청)');
+{
+  test('기본 배율은 4 Zone × 3 항목 모두 1', () => {
+    const w = S().zoneWeight;
+    assert.deepEqual(Object.keys(w), ['1', '2', '3', '4']);
+    Object.values(w).forEach(r => assert.deepEqual(r, { stab: 1, shock: 1, resp: 1 }));
+    assert.equal(L.isDefaultWeights(S()), true);
+  });
+  // 경계값을 포함한 격자: 상한 0.5 · 1 · 0.3 과 CAUTION 10% 경계(0.45·0.9·0.27) 바로 안팎, 부동소수 값 포함
+  const vals = { dPitch: [0, 0.3, 0.9, 0.9000001, 0.8999999, 1, 1.0000001, 1.2, NaN], shockIndex: [0.1, 0.45, 0.4500001, 0.5, 0.5000001, 0.1 + 0.2, NaN], response: [0.2, 0.27, 0.2700001, 0.3, 0.3000001, 0.7 * 0.3 / 0.7, NaN] };
+  test('기본 배율(1)에서는 모든 Zone·경계값 조합의 판정이 배율 도입 전과 같다', () => {
+    let n = 0;
+    for (const a of vals.dPitch) for (const b of vals.shockIndex) for (const c of vals.response) for (const z of [1, 2, 3, 4]) {
+      const f = { dPitch: a, shockIndex: b, response: c };
+      const j = L.judgeEvent(f, crit, S(), z), j0 = L.judgeEvent(f, crit, S());
+      assert.equal(j.status, j0.status); assert.deepEqual(j.reasons, j0.reasons);
+      // 항목 판정은 배율 없이 측정값 그대로 judgeItem 에 넣은 결과와 같다(배율 도입 전 식)
+      [[a, crit.stabMax], [b, crit.shockMax], [c, crit.respMax]].forEach(([v, hi], i) => {
+        const r = L.judgeItem(v, null, hi, 10); assert.equal(j.items[i].state, r.state); assert.equal(j.items[i].why, r.why);
+      });
+      n++;
+    }
+    assert.equal(n, 9 * 7 * 7 * 4);
+  });
+  test('기본 배율에서 예시 로그 32개 이벤트 판정이 배율 도입 전(dea45da)과 한 글자도 같다', () => {
+    const s = S(), lbs = Smp.sampleLabels(s), cr = {};
+    L.PARAM_KEYS.forEach(k => { const r = L.criteriaFromLabels(lbs, k, s.recommend.minLabels); if (r.ok) cr[k] = r.crit; });
+    const rs = L.analyze(L.tableFromRows(Smp.sampleLog(Smp.sampleSet())), Smp.mappingFromProfile(Smp.sampleProfile()), s);
+    // 아래 문자열은 배율을 넣기 전 코드(커밋 dea45da)로 같은 계산을 돌려 얻은 값입니다
+    const before = 'PASS,FAIL-PITCH,CAUTION,FAIL-PITCH,PASS,NO DATA,FAIL-PITCH,NO DATA,PASS,FAIL-SLOW,FAIL-PITCH,CAUTION,FAIL-PITCH,PASS,NO DATA,PASS,FAIL-PITCH,NO DATA,PASS,FAIL-SHOCK,FAIL-PITCH,PASS,FAIL-PITCH,CAUTION,PASS,NO DATA,FAIL-PITCH,CAUTION,FAIL-PITCH,NO DATA,FAIL-PITCH,PASS';
+    assert.equal(rs.events.map(e => L.judgeEvent(e.f, cr[e.key], s, e.zone).status).join(','), before);
+  });
+  test('배율 2: ΔPitch 0.6(상한 1) → 적용값 1.2 로 FAIL-PITCH, 다른 Zone 은 그대로 PASS', () => {
+    const s = S(); s.zoneWeight[2].stab = 2;
+    const f = { dPitch: 0.6, shockIndex: 0.3, response: 0.2 };
+    const j = L.judgeEvent(f, crit, s, 2);
+    assert.equal(j.status, 'FAIL-PITCH'); near(j.items[0].weighted, 1.2, 1e-12); near(j.items[0].score, 120, 1e-9);
+    assert.match(j.items[0].why, /배율 ×2/);
+    assert.equal(L.judgeEvent(f, crit, s, 1).status, 'PASS');
+  });
+  test('배율 0.5: 응답 0.4(상한 0.3) → 적용값 0.2 로 FAIL-SLOW 가 풀림', () => {
+    const s = S(); s.zoneWeight[4].resp = 0.5;
+    const f = { dPitch: 0.5, shockIndex: 0.3, response: 0.4 };
+    assert.equal(L.judgeEvent(f, crit, s, 3).status, 'FAIL-SLOW');
+    assert.equal(L.judgeEvent(f, crit, s, 4).status, 'PASS');
+  });
+  test('배율 1.1: 충격 0.42(상한 0.5, 84%) → 적용값 0.462(92.4%) 로 CAUTION', () => {
+    const s = S(); s.zoneWeight[1].shock = 1.1;
+    const j = L.judgeEvent({ dPitch: 0.5, shockIndex: 0.42, response: 0.2 }, crit, s, 1);
+    assert.equal(j.status, 'CAUTION'); near(j.items[1].score, 92.4, 1e-9);
+  });
+  test('종합 점수 = 세 항목 점수 중 최댓값: 0.5/1=50 · 0.3/0.5=60 · 0.2/0.3=66.7 → 66.7', () => {
+    const j = L.judgeEvent({ dPitch: 0.5, shockIndex: 0.3, response: 0.2 }, crit, S(), 1);
+    assert.deepEqual(j.items.map(i => i.score), [50, 60, 66.7]); assert.equal(j.score, 66.7);
+    assert.ok(Number.isNaN(L.judgeEvent({ dPitch: 0.5, shockIndex: 0.3, response: NaN }, crit, S(), 1).score));
+  });
+  test('배율 0 은 그 항목을 판정에서 빼는 것과 같다(적용값 0)', () => {
+    const s = S(); s.zoneWeight[3].shock = 0;
+    assert.equal(L.judgeEvent({ dPitch: 0.5, shockIndex: 9, response: 0.2 }, crit, s, 3).status, 'PASS');
+  });
+  test('저장본·백업의 배율 정리: 문자열 숫자는 받고, 음수·10 초과·글자는 1 로, 빠진 Zone 은 1', () => {
+    const m = L.mergeSettings({ zoneWeight: { 1: { stab: '1.5', shock: -1, resp: 11 }, 3: { stab: 'x', shock: 0, resp: 2 } } });
+    assert.deepEqual(m.zoneWeight[1], { stab: 1.5, shock: 1, resp: 1 });
+    assert.deepEqual(m.zoneWeight[2], { stab: 1, shock: 1, resp: 1 });
+    assert.deepEqual(m.zoneWeight[3], { stab: 1, shock: 0, resp: 2 });
+    assert.deepEqual(L.mergeSettings({}).zoneWeight, S().zoneWeight); // 배율이 없던 옛 저장본
+    assert.equal(L.isDefaultWeights(m), false);
+  });
+  test('백업 JSON 왕복: 내보낸 배율이 그대로 되살아난다', () => {
+    const s = S(); s.zoneWeight[2].resp = 1.25; s.zoneWeight[4].stab = 0.8;
+    const back = L.mergeSettings(JSON.parse(JSON.stringify(s)));
+    assert.deepEqual(back.zoneWeight, s.zoneWeight);
+  });
+  test('이벤트 결과 CSV 에 배율 3칸·종합 점수가 들어간다', () => {
+    const iw = L.EVENT_HEADER.indexOf('w_stab'), io = L.EVENT_HEADER.indexOf('overall_score');
+    assert.ok(iw > 0 && io === iw + 3 && L.EVENT_HEADER[io + 1] === 'status');
+    const s = S(); s.zoneWeight[1].shock = 1.6;
+    const ev = [{ no: 1, type: 'start', t: 1, dir: 'UP', zone: 1, arm: 10, key: 'UP_1_start', f: { dPitch: 0.5, shockIndex: 0.3, response: 0.2 } }];
+    const row = L.eventRows(ev, e => L.judgeEvent(e.f, crit, s, e.zone))[0];
+    assert.deepEqual(row.slice(iw, io + 2), [1, 1.6, 1, 96, 'CAUTION']);
+  });
+}
+
+console.log('실제 로그 열 형식 (2026-09-29 메일로 받은 sample data.csv 와 같은 열 이름·순서, 값은 가상)');
+{
+  const rows = Smp.realOrderLog(Smp.sampleSet(), 31), tb = L.tableFromRows(rows), m = L.recommendMapping(L.columnStats(tb), 'split');
+  test('열 순서가 실제 로그와 같다 (Time, EngSpeed, Pitch, BoomAngle%, HeadPressure, AngleVoltage, EPPR Up, EPPR Down)', () => assert.deepEqual(rows[0], Smp.REAL_ORDER));
+  test('자동추천이 실제 채널명을 표준 신호에 잇는다', () => {
+    const got = Object.fromEntries(['time', 'arm', 'curUp', 'curDown', 'headP', 'pitch', 'rpm'].map(k => [k, m.rows[k].header]));
+    assert.deepEqual(got, { time: 'Time[s]', arm: 'LASP::FFD3_BoomAnglePercentage', curUp: 'LOGE_::EPPR_ArmUp[mA]', curDown: 'LOGE_::EPPR_ArmDown[mA]',
+      headP: 'LABHRP::FFD2_ArmCylinderHeadPressure', pitch: 'Body_IMU_Angle_SQ::PitchAngle[deg]', rpm: 'EEC1::EngSpeed[rpm]' });
+  });
+  test('Arm: 이름은 맞지만 [mV] 인 AngleSensorVoltage_Arm 은 자동 선택하지 않고 「확인 필요」로 남긴다', () => {
+    assert.deepEqual(m.rows.arm.unitRejected, ['LOGI_::AngleSensorVoltage_Arm[mV]']); assert.match(m.rows.arm.reason, /확인 필요/);
+    assert.deepEqual(m.rows.pitch.unitRejected, []);
+  });
+  test('단위 없는 Head Pressure 와 EPPR 역할은 추정하지 않아 Confirm 전에 사람이 정해야 한다', () => {
+    assert.equal(m.rows.headP.unit, ''); assert.equal(m.rows.curUp.role, '');
+    Object.values(m.rows).forEach(r => { if (r.header) r.confirmed = true; });
+    const v = L.validateMapping(m); assert.equal(v.canConfirm, false);
+    assert.ok(v.errors.some(e => /Head Pressure: 단위/.test(e)) && v.errors.some(e => /Command \/ Actual/.test(e)));
+  });
+  test('단위·역할을 정하면 끝까지 분석된다: 4 Zone × UP/DOWN × Start/Stop 이 모두 검출', () => {
+    m.rows.headP.unit = 'bar'; m.rows.curUp.role = 'command'; m.rows.curDown.role = 'command'; m.excludeFirstRow = true;
+    assert.equal(L.validateMapping(m).canConfirm, true); m.confirmed = true;
+    const r = L.analyze(tb, m, S()); assert.equal(r.ok, true);
+    const keys = new Set(r.events.map(e => e.key));
+    assert.equal(keys.size, 16, '검출된 파라미터 키 ' + [...keys].join(','));
+    r.events.forEach(e => assert.ok(['PASS', 'CAUTION', 'FAIL-SHOCK', 'FAIL-PITCH', 'FAIL-SLOW', 'NO DATA'].includes(L.judgeEvent(e.f, { stabMax: 1, shockMax: 1, respMax: 1 }, S(), e.zone).status)));
+  });
+}
+
 console.log(`\n${passed}개 통과${process.exitCode ? ' — 실패 있음' : ''}`);

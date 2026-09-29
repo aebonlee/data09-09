@@ -29,7 +29,7 @@
       main.innerHTML = h + '<div class="card empty">불러온 로그가 없습니다. 로그 파일을 올리거나 「예시 데이터 불러오기」를 누르세요.</div>';
       bindTop(main); return;
     }
-    h += '<div class="card"><h2>불러온 로그</h2><div class="table-wrap"><table class="list"><thead><tr><th>선택</th><th>파일</th><th class="num">행</th><th class="num">채널</th><th>상태</th><th>이벤트</th><th></th></tr></thead><tbody>' +
+    h += '<div class="card"><h2>불러온 로그</h2><div class="table-wrap scroll-y"><table class="list"><thead><tr><th>선택</th><th>파일</th><th class="num">행</th><th class="num">채널</th><th>상태</th><th>이벤트</th><th></th></tr></thead><tbody>' +
       App.logs.map(function (lg, i) {
         return '<tr class="' + (i === App.activeLog ? 'sel' : '') + '"><td><input type="radio" name="actLog" value="' + i + '"' + (i === App.activeLog ? ' checked' : '') + ' aria-label="' + esc(lg.name) + ' 선택"></td><td class="mono">' + esc(lg.name) + '</td><td class="num">' + lg.table.data.length + '</td><td class="num">' + lg.table.header.length + '</td><td>' + statusOf(lg) + '</td><td>' + (lg.result && lg.result.ok ? lg.result.events.length + '개' : '—') + '</td><td><button class="btn btn-sm btn-danger" data-rm="' + i + '">닫기</button></td></tr>';
       }).join('') + '</tbody></table></div></div>';
@@ -51,7 +51,7 @@
     });
     var sb = main.querySelector('#sampleLogs');
     if (sb) sb.addEventListener('click', function () {
-      App.dialog('예시 데이터 불러오기', '<p>합성(가상) 예시 로그 2건, 예시 라벨 96건, 예시 Calibration Set 2개, 예시 채널맵을 불러옵니다. 지금 브라우저에 있는 파라미터·버전·라벨·기준은 예시로 바뀝니다.</p>', [
+      App.dialog('예시 데이터 불러오기', '<p>합성(가상) 예시 로그 3건(3번째는 실제 로그와 같은 열 순서, 자동추천부터 시작), 예시 라벨 96건, 예시 Calibration Set 2개, 예시 채널맵을 불러옵니다. 지금 브라우저에 있는 파라미터·버전·라벨·기준은 예시로 바뀝니다.</p>', [
         { label: '취소' },
         { label: '불러오기', primary: true, onClick: function () { App.loadSample(); App.toast('예시 데이터를 불러왔습니다 — 매핑을 확인하고 Mapping Confirm 하세요'); App.go('#/log'); } }
       ]);
@@ -72,7 +72,7 @@
       '<label class="field" style="min-width:12em"><span>Current Mode</span><select class="inp" id="curMode">' + App.opt('split', 'UP/DOWN 분리', m.mode) + App.opt('single', '단일 Current', m.mode) + '</select></label></div>';
     h += '<p class="note">매핑 출처: ' + esc(lg.mappingFrom || '') + '. 자동추천·Profile 복원은 <b>제안</b>일 뿐입니다. 행마다 헤더·단위·역할을 보고 「확인」을 체크한 뒤 Mapping Confirm 하세요. 헤더·단위·역할을 바꾸면 그 행의 확인과 Mapping Confirm 이 풀립니다.</p>';
     if (lg.profileChanges && lg.profileChanges.length) h += '<div class="alert warn"><b>Profile 과 달라진 점</b><ul class="msgs">' + lg.profileChanges.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></div>';
-    h += '<div class="table-wrap"><table class="list" id="mapTable"><thead><tr><th>표준 신호</th><th>필수 여부</th><th>CSV 헤더 (원문)</th><th>역할</th><th>원단위</th><th>분석단위·변환</th><th>추천 이유</th><th>미리보기</th><th>확인</th></tr></thead><tbody>';
+    h += '<div class="table-wrap scroll-y"><table class="list" id="mapTable"><thead><tr><th>표준 신호</th><th>필수 여부</th><th>CSV 헤더 (원문)</th><th>역할</th><th>원단위</th><th>분석단위·변환</th><th>추천 이유</th><th>미리보기</th><th>확인</th></tr></thead><tbody>';
     L.signalsForMode(m.mode).forEach(function (sg) {
       var r = m.rows[sg.id] || (m.rows[sg.id] = { header: '', role: '', unit: '', confirmed: false, reason: '' });
       var s = st.filter(function (x) { return x.header === r.header; })[0];
@@ -199,11 +199,11 @@
     h += '<div class="deriv-pick"><b>파생 신호 표시:</b>' + [['dArm', 'd(Arm%)/dt'], ['dCur', 'dCurrent/dt'], ['dP', 'dP/dt'], ['dPitch', 'dPitch/dt'], ['d2Pitch', 'd²Pitch/dt²']].map(function (x) { return '<label class="check"><input type="checkbox" data-dv="' + x[0] + '"' + (derivShow[x[0]] ? ' checked' : '') + '> ' + x[1] + '</label>'; }).join('') + '</div>';
     h += '<div id="logTracks"></div>';
     h += '<div class="btn-row" style="margin:10px 0"><button class="btn" id="evCsv">이벤트 결과 CSV</button><button class="btn" id="evXlsx">이벤트 결과 Excel (매핑 스냅샷 포함)</button></div>';
-    h += '<div class="table-wrap"><table class="list" id="evTable"><thead><tr><th>#</th><th>이벤트</th><th class="num">시각(s)</th><th>방향</th><th>Zone</th><th class="num">Arm %</th><th class="num">응답(s)</th><th class="num">실측 Ramp</th><th class="num">ΔP</th><th class="num">max|dP/dt|</th><th class="num">ΔPitch</th><th class="num">max|d²Pitch|</th><th class="num">Settling(s)</th><th class="num">Shock Index</th><th>판정</th></tr></thead><tbody>' +
+    h += '<div class="table-wrap scroll-y"><table class="list" id="evTable"><thead><tr><th>#</th><th>이벤트</th><th class="num">시각(s)</th><th>방향</th><th>Zone</th><th class="num">Arm %</th><th class="num">응답(s)</th><th class="num">실측 Ramp</th><th class="num">ΔP</th><th class="num">max|dP/dt|</th><th class="num">ΔPitch</th><th class="num">max|d²Pitch|</th><th class="num">Settling(s)</th><th class="num">Shock Index</th><th class="num">종합 점수</th><th>판정</th></tr></thead><tbody>' +
       r.events.map(function (e) {
         var f = e.f, j = App.judge(e);
-        return '<tr class="click" data-ev="' + e.no + '" tabindex="0"><td>' + e.no + '</td><td>' + (e.type === 'start' ? 'Start' : 'Stop') + '</td><td class="num">' + fmt(e.t, 2) + '</td><td>' + e.dir + '</td><td>' + e.zone + '</td><td class="num">' + fmt(e.arm, 1) + '</td><td class="num">' + fmt(f.response, 3) + '</td><td class="num">' + fmt(f.rampMeasured, 1) + ' ' + esc(f.curUnit ? f.curUnit + '/s' : '') + '</td><td class="num">' + fmt(f.dP) + '</td><td class="num">' + fmt(f.dpdtMax) + '</td><td class="num">' + fmt(f.dPitch, 3) + '</td><td class="num">' + fmt(f.d2PitchMax) + '</td><td class="num">' + fmt(f.settling, 2) + '</td><td class="num">' + fmt(f.shockIndex, 3) + '</td><td>' + App.badge(j.status) + '</td></tr>';
-      }).join('') + '</tbody></table></div><p class="note">행을 누르면 Calibration 화면에서 그 이벤트의 Zone·방향과 판정표를 엽니다.</p></div>';
+        return '<tr class="click" data-ev="' + e.no + '" tabindex="0"><td>' + e.no + '</td><td>' + (e.type === 'start' ? 'Start' : 'Stop') + '</td><td class="num">' + fmt(e.t, 2) + '</td><td>' + e.dir + '</td><td>' + e.zone + '</td><td class="num">' + fmt(e.arm, 1) + '</td><td class="num">' + fmt(f.response, 3) + '</td><td class="num">' + fmt(f.rampMeasured, 1) + ' ' + esc(f.curUnit ? f.curUnit + '/s' : '') + '</td><td class="num">' + fmt(f.dP) + '</td><td class="num">' + fmt(f.dpdtMax) + '</td><td class="num">' + fmt(f.dPitch, 3) + '</td><td class="num">' + fmt(f.d2PitchMax) + '</td><td class="num">' + fmt(f.settling, 2) + '</td><td class="num">' + fmt(f.shockIndex, 3) + '</td><td class="num">' + (L.isNum(j.score) ? fmt(j.score, 1) + '%' : '—') + '</td><td>' + App.badge(j.status) + '</td></tr>';
+      }).join('') + '</tbody></table></div><p class="note">표가 길면 머리줄은 그대로 두고 표 안에서 스크롤합니다. 종합 점수는 Zone별 배율을 적용한 세 항목 한계 사용률 중 가장 큰 값입니다(설정 → Zone별 점수 배율). 행을 누르면 Calibration 화면에서 그 이벤트의 Zone·방향과 판정표를 엽니다.</p></div>';
     area.innerHTML = h;
     drawLogTracks(lg);
     App.onResize = function () { drawLogTracks(lg); };

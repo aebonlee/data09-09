@@ -26,6 +26,7 @@ DB 에 연결하는 코드는 다음 단계에서 붙입니다.
 | `sensory_label` | 기준 시험원 감성 라벨 DB | `data09-09.state` 의 `labels[]` |
 | `acceptance_criteria` | Zone × 방향 × Start/Stop 허용 범위 (파라미터 16개) | `data09-09.state` 의 `criteria{}` |
 | `mapping_profile` | Channel Mapping Profile (이름별 버전) | `data09-09.state` 의 `profiles[]` |
+| `zone_score_weight` | Zone별 점수 배율 — 안정도·충격지수·응답성 (Zone 1~4, 기본 1, 0~10) · 2026-09-29 추가 | `data09-09.state` 의 `settings.zoneWeight` |
 
 필드 이름은 도구의 이름을 snake_case 로 그대로 옮겼습니다.
 SQL 예약어와 겹치는 것만 바꿨습니다.
@@ -37,6 +38,7 @@ SQL 예약어와 겹치는 것만 바꿨습니다.
 | `user` | `user_name` |
 | 버전 `id` · Profile `id` | `version_id` · `profile_id` |
 | `criteria` 의 `stabMin` 등 | `stab_min` · `stab_max` · `shock_max` · `resp_max` |
+| `settings.zoneWeight[zone]` 의 `stab`·`shock`·`resp` | `zone_score_weight` 의 `zone` 행 · `stab_weight`·`shock_weight`·`resp_weight` |
 
 `stab_min`(안정도 ΔPitch 하한)은 2026-09-29 수강생 요청으로 도구에서 더 쓰지 않습니다. 칼럼은 nullable 이라 그대로 두고 비워 둡니다.
 
@@ -57,6 +59,9 @@ SQL 예약어와 겹치는 것만 바꿨습니다.
 5. **Run** 을 누릅니다.
 
 여러 번 실행해도 안전합니다. 이미 있는 표는 건너뛰고 정책·트리거는 지우고 다시 만듭니다.
+2026-09-29 에 `zone_score_weight` 표를 더했습니다. 전에 한 번 실행한 프로젝트도 이 파일 전체를 다시 실행하면 새 표·정책·권한이 붙습니다(옛 스키마 → 새 스키마 순서로 로컬 검증함).
+
+Zone 배율은 도구에서는 `settings.zoneWeight` 로 `workspace.settings` 안에도 들어갑니다. 연결 코드를 붙일 때는 `zone_score_weight` 를 정본으로 쓰십시오 — 값 범위(0~10)·Zone(1~4)·중복을 DB 제약이 막아 주기 때문입니다.
 
 ## 확인 방법
 
