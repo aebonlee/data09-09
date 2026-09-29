@@ -53,8 +53,8 @@ begin
   values ('A', 'UP_1_start', '300', '280', '직접 입력', '테스트');
   insert into public.sensory_label (label_id, direction, zone, event, shock_label, pitch_label, resp_label, overall)
   values ('L0001', 'UP', 1, 'Start', 'OK', 'OK', 'Good', 'Accept');
-  insert into public.acceptance_criteria (param_key, stab_min, stab_max, shock_max, resp_max)
-  values ('UP_1_start', -0.5, 0.5, 1.2, 0.8);
+  insert into public.acceptance_criteria (param_key, stab_min, stab_max, shock_max, resp_max, settle_max)
+  values ('UP_1_start', -0.5, 0.5, 1.2, 0.8, 0.6);
   insert into public.mapping_profile (profile_id, name, version, mode)
   values ('MP-001', '시험장비 A', 1, 'split');
   insert into public.zone_score_weight (zone) values (1), (2), (3), (4);
@@ -242,6 +242,8 @@ begin
     '23514', '파라미터 키는 (UP|DOWN)_1~4_(start|stop) 형식만 받는다');
   perform public._assert_raises($s$insert into public.acceptance_criteria (param_key, stab_min, stab_max) values ('UP_2_stop', 1, -1)$s$,
     '23514', '안정도 하한이 상한보다 크면 막는다');
+  perform public._assert_raises($s$insert into public.acceptance_criteria (param_key, settle_max) values ('UP_3_stop', -0.1)$s$,
+    '23514', 'Settling Time 상한은 음수를 받지 않는다');
   perform public._assert_raises($s$insert into public.acceptance_criteria (param_key) values ('UP_1_start')$s$,
     '23505', '같은 파라미터의 허용 범위 중복은 UNIQUE 가 막는다');
   perform public._assert_raises($s$insert into public.calibration_version (version_id, name, param_values) values ('V001', '중복', '{}')$s$,

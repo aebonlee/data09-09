@@ -218,14 +218,21 @@
       return '<label class="zw-field"><span>' + esc(c[1].replace(/ \(.*\)/, '')) + ' ×</span><input class="inp' + (zw[c[0]] !== 1 ? ' changed' : '') + '" type="number" min="0" max="' + L.WEIGHT_MAX + '" step="0.05" data-czw="' + c[0] + '" value="' + zw[c[0]] + '" aria-label="' + esc(zl.label + ' ' + c[1] + ' 배율') + '"></label>';
     }).join('') + '<a href="#/settings" class="note">4 Zone 표 전체 보기</a></div>';
     h += '<div class="table-wrap"><table class="list"><thead><tr><th>항목별 점수 (' + esc(L.paramLabel(ev.key)) + ')</th><th>기준 범위</th><th class="num">측정값</th><th class="num">배율</th><th class="num">적용값</th><th class="num">점수</th><th>판정</th></tr></thead><tbody>' +
-      j.items.map(function (it) { return '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.crit) + (it.unit ? ' ' + it.unit : '') + '</td><td class="num">' + fmt(it.value, 3) + '</td><td class="num">×' + fmt(it.weight) + '</td><td class="num">' + fmt(it.weighted, 3) + '</td><td class="num">' + (L.isNum(it.score) ? fmt(it.score, 1) + '%' : '—') + '</td><td>' + App.itemBadge(it.state) + ' <small class="note">' + esc(it.why) + '</small></td></tr>'; }).join('') +
+      j.items.map(function (it) {
+        var row = '<tr><td>' + esc(it.name) + '</td><td>' + esc(it.crit) + (it.unit && !(it.parts && it.parts.length > 1) ? ' ' + it.unit : '') + '</td><td class="num">' + fmt(it.value, 3) + '</td><td class="num">×' + fmt(it.weight) + '</td><td class="num">' + fmt(it.weighted, 3) + '</td><td class="num">' + (L.isNum(it.score) ? fmt(it.score, 1) + '%' : '—') + '</td><td>' + App.itemBadge(it.state) + ' <small class="note">' + esc(it.why) + '</small></td></tr>';
+        // 안정도가 ΔPitch · Settling 두 부분이면 부분별 줄을 아래에 붙입니다 (2026-09-29 요청)
+        if (it.parts && it.parts.length > 1) row += it.parts.map(function (p) {
+          return '<tr class="sub-row"><td>└ ' + esc(p.name) + '</td><td>' + (L.isNum(p.hi) ? fmt(p.hi, 3) + ' ' + p.unit + ' 이하' : '—') + '</td><td class="num">' + fmt(p.value, 3) + (p.capped ? ' 이상' : '') + '</td><td class="num">×' + fmt(it.weight) + '</td><td class="num">' + fmt(p.weighted, 3) + '</td><td class="num">' + (L.isNum(p.score) ? fmt(p.score, 1) + '%' : '—') + '</td><td>' + App.itemBadge(p.state) + ' <small class="note">' + esc(p.why) + '</small></td></tr>';
+        }).join('');
+        return row;
+      }).join('') +
       '<tr><td><b>종합 판정</b></td><td colspan="4">' + (crit && crit.source ? '<small class="note">기준 출처: ' + esc(crit.source) + '</small>' : (crit ? '' : '<small class="note">이 파라미터의 기준이 없습니다</small>')) + '</td><td class="num"><b>' + (L.isNum(j.score) ? fmt(j.score, 1) + '%' : '—') + '</b></td><td>' + App.badge(j.status) + '</td></tr></tbody></table></div>';
     h += '<div class="kv-grid">' + [
       ['설정 Ramp (' + L.EVENT_LABEL[ev.type] + ')', fmt(setV) + ' %/s'],
       ['실측 Ramp (10→90%)', fmt(f.rampMeasured, 1) + ' ' + unit + (f.curUnit === 'mA' ? ' — % 보정 없음, %/s 비교 불가' : '')],
       [ev.type === 'start' ? 'Response Delay' : 'Stop Response Time', fmt(f.response, 3) + ' s'],
       ['Head P 이전 → Peak', fmt(f.pBefore) + ' → ' + fmt(f.pPeak) + ' bar'], ['ΔP', fmt(f.dP) + ' bar'], ['max |dP/dt|', fmt(f.dpdtMax) + ' bar/s'],
-      ['max |dCurrent/dt|', fmt(f.dCurMax) + ' ' + unit], ['Settling Time', L.isNum(f.settling) ? fmt(f.settling, 2) + ' s' : '창 안에서 정착 안 함'], ['Shock Index (가정 식)', fmt(f.shockIndex, 3)]
+      ['max |dCurrent/dt|', fmt(f.dCurMax) + ' ' + unit], ['Settling Time (Band ±' + fmt(f.settleBand, 3) + '°)', L.isNum(f.settling) ? fmt(f.settling, 2) + ' s' : '창 안에서 정착 안 함 (' + fmt(f.settleCap, 2) + ' s 이상)'], ['Shock Index (가정 식)', fmt(f.shockIndex, 3)]
     ].map(function (x) { return '<div><span>' + esc(x[0]) + '</span>' + esc(x[1]) + '</div>'; }).join('') + '</div>';
     h += '<h3>' + (ev.dir === 'DOWN' ? 'DOWN Pitch 평가 (Absolute Pitch · ΔPitch 별도 표시)' : 'Pitch 응답') + '</h3><div class="kv-grid">' + [
       ['Absolute Pitch (최대 크기)', fmt(f.pitchAbs, 3) + ' deg'], ['ΔPitch', fmt(f.dPitch, 3) + ' deg'], ['Pitch Peak-to-Peak', fmt(f.pitchP2P, 3) + ' deg'],

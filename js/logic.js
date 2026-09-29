@@ -48,9 +48,13 @@
       profile: { amp: 100, hold: 1.0 }, // 그래프 표시용: 목표 Current(%)·유지 시간(s)
       signal: { dt: 0.01 },   // 목표 Sampling (제출 기획서: 10 ms)
       quality: { maxFillSamples: 3, gapFactor: 5 }, // 이어 계산할 최대 결측 행 수, 공백 판정 배수
-      detect: { smoothWin: 5, startThr: 3, stopThr: 1.5, hold: 0.05, pre: 1.0, post: 1.5, onsetFrac: 0.05, minStepFrac: 0.1, settleBand: 0.1, settleTail: 0.2 },
+      detect: { smoothWin: 5, startThr: 3, stopThr: 1.5, hold: 0.05, pre: 1.0, post: 1.5, onsetFrac: 0.05, minStepFrac: 0.1, settleBand: 0.015, settleBandFrac: 0.2, settleTail: 0.2 },
       shock: { refDpdt: 400, refD2pitch: 60, wDpdt: 0.5, wD2pitch: 0.5 },
       cautionPct: 10,         // 허용 한계 안쪽 이 % 이내면 CAUTION
+      // 안정도에 Settling Time 포함 (2026-09-29 오전 2차 글: 「길수록 안정도 저하」)
+      stability: { useSettling: true },
+      // 장비 기본값 — 수강생이 2026-09-29 오후에 확정한 값. 자동추천이 헤더에 단위·역할이 없을 때 채웁니다
+      mapDefaults: { headPUnit: 'bar', curRole: 'command', i0: 0, i100: 650 },
       safety: { pressureMax: null, pitchAbsMax: null },
       recommend: { minLabels: 3, percentile: 75 },
       // Zone별 점수 배율 (2026-09-29 오전 2차 요청). 1 이면 예전 판정과 같습니다
@@ -304,8 +308,11 @@
     return { mode: mode || 'split', rows: {}, cal: { UP: { i0: null, i100: null }, DOWN: { i0: null, i100: null }, ALL: { i0: null, i100: null } }, excludeFirstRow: false, confirmed: false, profileId: '', profileVersion: 0 };
   }
   // 자동추천 — 결과는 모두 「제안」이며 confirmed=false 입니다.
-  function recommendMapping(stats, mode) {
+  // defaults(선택) = 설정의 장비 기본값 { headPUnit, curRole, i0, i100 }. 헤더에 단위·역할이 없을 때만 채우고,
+  // 채운 칸은 이유에 「장비 기본값」이라고 적습니다. 그래도 행마다 「확인」은 사람이 합니다.
+  function recommendMapping(stats, mode, defaults) {
     var m = emptyMapping(mode);
+    var dfl = defaults || {};
     var taken = {};
     signalsForMode(m.mode).forEach(function (sg) {
       var row = { header: '', role: '', unit: '', confirmed: false, reason: '', candidates: [], ambiguous: false };
@@ -335,7 +342,10 @@
       row.reason = '추천: ' + best.why.join(', ') + offNote;
       row.unit = st.unit && sg.units.indexOf(st.unit) >= 0 ? st.unit : (sg.units.length === 1 ? sg.units[0] : '');
       if (sg.kind === 'current') row.role = guessRole(best.header);
+      if (sg.id === 'headP' && !row.unit && sg.units.indexOf(dfl.headPUnit) >= 0) { row.unit = dfl.headPUnit; row.reason += ' · 단위는 장비 기본값 ' + dfl.headPUnit + '(설정에서 바꿈)'; }
+      if (sg.kind === 'current' && !row.role && (dfl.curRole === 'command' || dfl.curRole === 'actual')) { row.role = dfl.curRole; row.reason += ' · 역할은 장비 기본값 ' + (dfl.curRole === 'command' ? 'Command' : 'Actual Coil') + '(설정에서 바꿈)'; }
     });
+    if (isNum(dfl.i0) && isNum(dfl.i100) && dfl.i100 !== dfl.i0) ['UP', 'DOWN', 'ALL'].forEach(function (d) { m.cal[d] = { i0: dfl.i0, i100: dfl.i100 }; });
     return m;
   }
   // 저장한 Mapping Profile 을 새 파일에 「제안」 상태로 되살립니다 (AC-18)
@@ -677,7 +687,11 @@
     f.pitchBefore = round(pb, 3); f.pitchAbs = round(absP, 3); f.dPitch = round(dMax, 3); f.pitchP2P = round(mx - mn, 3);
     f.dPitchMax = round(maxAbs(d.dPitch, ref, i1), 3);
     f.d2PitchMax = round(maxAbs(d.d2Pitch, ref, i1), 2);
-    f.settling = settlingTime(t, d.pitchS, ie, i1, det);
+    // Settling 허용 밴드 = max(최소 밴드, 비율 × 이 Window 의 Pitch Peak-to-Peak) — 흔들림 크기에 맞춘 밴드(제어공학의 ±n% 정착 시간과 같은 뜻).
+    // 실제 로그는 Pitch 변화가 0.01° 단위로 아주 작아 고정 0.1° 로는 전부 0 s 가 되어서 바꿨습니다 (2026-09-29 오후)
+    f.settleBand = round(Math.max(det.settleBand, (det.settleBandFrac || 0) * (mx - mn)), 4);
+    f.settling = settlingTime(t, d.pitchS, ie, i1, { settleBand: f.settleBand, settleTail: det.settleTail });
+    f.settleCap = round(t[i1] - t[ie], 3); // Window 안에서 정착하지 않으면 판정에서 이 값(= 적어도 이만큼)으로 봅니다
     f.shockIndex = shockIndex(f, s);
     return f;
   }
@@ -754,6 +768,33 @@
   //   항목 점수  = 배율 적용값 ÷ 상한 × 100   (한계 사용률 %, 100 초과 = FAIL, 100 − CAUTION 폭 초과 = CAUTION)
   //   종합 점수  = 세 항목 점수 중 가장 큰 값 (가장 한계에 가까운 항목이 종합 판정을 정합니다)
   // 배율이 모두 1 이면 배율 적용값 = 측정값이라 예전 판정과 똑같습니다. zone 을 안 주면 배율 1.
+  // 안정도에 Settling Time 편입 (2026-09-29 오전 2차 글: 「settling time도 안정도 평가의 한부분으로 편입(길수록 안정도 저하)」)
+  //   Settling 점수 = Settling Time × 안정도 배율 ÷ Settling 상한(settleMax) × 100
+  //   안정도 점수   = max(ΔPitch 점수, Settling 점수) — 둘 중 한계에 더 가까운 쪽이 안정도를 정합니다
+  //   안정도 판정   = 두 부분 중 나쁜 쪽 (FAIL > CAUTION > OK). FAIL 이면 FAIL-PITCH
+  //   Window 안에서 정착하지 않았으면 Settling = Window 끝까지의 시간(settleCap, 적어도 이만큼)으로 봅니다.
+  // 허용 범위에 Settling 상한이 없거나(예전 기준) 설정에서 끄면 예전과 똑같이 ΔPitch 만 봅니다.
+  function settleIntoStability(it, f, crit, s) {
+    var first = { name: 'ΔPitch', unit: '°', value: it.value, weighted: it.weighted, hi: it.hi, score: it.score, state: it.state, why: it.why };
+    it.parts = [first];
+    if (s.stability && s.stability.useSettling === false) return;
+    if (!isNum(crit.settleMax)) return;
+    var capped = !isNum(f.settling) && isNum(f.settleCap), v = isNum(f.settling) ? f.settling : f.settleCap;
+    if (!isNum(v)) return;
+    var wv = v * it.weight, r = judgeItem(wv, null, crit.settleMax, s.cautionPct);
+    var part = { name: 'Settling Time', unit: 's', value: v, capped: capped, weighted: wv, hi: crit.settleMax, state: r.state,
+      why: (capped ? 'Window 안에서 정착 안 함(' + v + ' s 로 계산) — ' : '') + r.why,
+      score: crit.settleMax > 0 ? round(wv / crit.settleMax * 100, 1) : NaN };
+    it.parts.push(part);
+    it.name = '안정도 (ΔPitch · Settling)';
+    var rank = { fail: 3, nodata: 2, caution: 1, ok: 0 };
+    if (first.state !== 'nodata' && rank[part.state] > rank[first.state]) it.state = part.state;
+    else if (first.state === 'nodata' && part.state === 'fail') it.state = 'fail';
+    var bad = it.parts.filter(function (p) { return p.state === 'fail' || p.state === 'caution'; });
+    if (bad.length) it.why = bad.map(function (p) { return p.name + ' ' + (p === first && it.weight !== 1 ? p.why : p.why); }).join(' · ');
+    if (isNum(first.score) && isNum(part.score)) it.score = Math.max(first.score, part.score);
+    it.crit = 'ΔPitch ' + critText(null, it.hi) + '° · Settling ' + critText(null, crit.settleMax).replace(' 이하', ' s 이하');
+  }
   function judgeEvent(f, crit, s, zone) {
     crit = crit || {};
     var w = zoneWeights(s, zone);
@@ -771,6 +812,7 @@
       it.crit = critText(it.lo, it.hi);
       it.score = isNum(it.weighted) && isNum(it.hi) && it.hi > 0 ? round(it.weighted / it.hi * 100, 1) : NaN;
     });
+    settleIntoStability(items[0], f, crit, s);
     var scores = items.map(function (i) { return i.score; }).filter(isNum);
     var score = scores.length === items.length ? Math.max.apply(null, scores) : NaN;
     var reasons = [], status;
@@ -849,13 +891,14 @@
     var acc = labels.filter(function (l) { return labelKey(l) === key && l.overall === 'Accept'; });
     if (acc.length < minLabels) return { ok: false, n: acc.length };
     function col(k) { return acc.map(function (l) { return num(l[k]); }).filter(isNum); }
-    var dp = col('delta_pitch'), sh = col('shock_index'), rs = col('response_s');
+    var dp = col('delta_pitch'), sh = col('shock_index'), rs = col('response_s'), sl = col('settling_s');
     return {
       ok: true, n: acc.length,
       crit: {
         stabMax: dp.length ? round(Math.max.apply(null, dp), 3) : null,
         shockMax: sh.length ? round(Math.max.apply(null, sh), 3) : null,
         respMax: rs.length ? round(Math.max.apply(null, rs), 3) : null,
+        settleMax: sl.length ? round(Math.max.apply(null, sl), 3) : null,
         source: 'Accepted 라벨 ' + acc.length + '건'
       }
     };

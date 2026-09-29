@@ -6,7 +6,7 @@
 |---|---|
 | 제출자 | 이영우 |
 | 과정 | 현장 데이터 수집·디지털화 전문가과정 1차수 (2026) |
-| 진행 단계 | 1단계 개발 완료 (2026-09-28), 2026-09-29 추가 요청 5건 반영 — https://aebonlee.github.io/data09-09/ |
+| 진행 단계 | 1단계 개발 완료 (2026-09-28), 2026-09-29 추가 요청 6건·확인 답변 반영 — https://aebonlee.github.io/data09-09/ |
 | 다음 개발 | 2단계 — 실제 `sample data.csv`·라벨로 Threshold·Shock Index·허용 범위 확정, 실제 파라미터 사양(명칭·Min/Max·ECU 환산) 반영, 학습 기반 추천·MDF/CAN 로그 Import |
 
 ## 이 저장소 이용 안내
@@ -78,6 +78,8 @@
 | 차트 커서 (2026-09-29 요청) | 완료 | 로그 탭 트랙·Calibration 탭 이벤트 트랙·Ramp Profile 에 Tracking(수직 커서 1개, 모든 트랙 동기화)·Value Difference(커서 A·B, Δy·Δx) 모드. 마우스·터치 드래그, 화살표 키, 값은 선형 보간 |
 | Zone별 점수 배율 (2026-09-29 2차 요청) | 완료 | 설정 화면 표(Zone 1~4 × 안정도·충격지수·응답성)와 Calibration 판정표 위 입력칸. 측정값 × 배율을 상한과 비교, 항목 점수 = 적용값 ÷ 상한 × 100, 종합 점수 = 가장 큰 항목 점수. 기본 1 = 이전과 같은 판정(테스트로 보장). 백업·이벤트 CSV/Excel 에 포함, `supabase/schema.sql` 의 `zone_score_weight` |
 | 결과 표 머리줄 고정 (2026-09-29 2차 요청) | 완료 | 로그 탭의 불러온 로그·Channel Mapping·이벤트 결과 표와 라벨 DB·변경 이력 표는 표 안에서 스크롤하고 머리줄은 고정. 좁은 화면 가로 스크롤과 함께 동작 |
+| 안정도에 Settling Time 편입 (2026-09-29 요청) | 완료 | 안정도 점수 = max(ΔPitch 점수, Settling 점수), 길수록 저하. Band = max(0.015°, 0.2 × Pitch Peak-to-Peak) — 실제 로그의 작은 Pitch 변화에 맞춤. 허용 범위에 Settling 상한 칸, 비우면 예전처럼 ΔPitch 만 |
+| 장비 기본값 (2026-09-29 수강생 확정) | 완료 | 자동추천이 헤더에 없을 때 Head Pressure bar · EPPR Command · 전류 보정 I0 0 / I100 650 mA 를 채움(설정에서 바꿈, 행별 「확인」은 그대로) |
 | 설정 설명 말풍선 (2026-09-29 요청) | 완료 | 설정·데이터 화면 소제목 7곳 옆 i 아이콘 — 마우스 올림·키보드 초점·모바일 탭으로 파라미터 뜻 표시(기획서·코드 정의에서 옮김) |
 | 판정 상태 | 완료 | PASS / CAUTION / FAIL-SHOCK / FAIL-PITCH / FAIL-SLOW / NO DATA, Safety Limit 우선(초과 시 최종 Confirm 차단) (AC-06) |
 | 추천 Side Panel (Rule 기반) | 완료 | Accepted 라벨 ramp 값의 상위 백분위 쪽으로, 1회 변화폭·Min/Max·Step 안에서. 근거 부족은 「추천 불가/데이터 부족」, 「적용」 전 값 불변, 전류 % 보정 없으면 차단 (AC-07, AC-09) |

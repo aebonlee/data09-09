@@ -179,7 +179,7 @@
     // 같은 헤더 구조의 Mapping Profile 이 있으면 제안 상태로 되살리고, 없으면 자동추천
     var pr = opt && opt.auto ? null : App.bestProfile(stats);
     if (pr) { var ap = L.applyProfile(pr, stats); lg.mapping = ap.mapping; lg.profileChanges = ap.changes; lg.mappingFrom = 'Profile 「' + pr.name + '」 v' + pr.version + ' 에서 제안'; }
-    else { lg.mapping = L.recommendMapping(stats, 'split'); lg.mappingFrom = '자동추천'; }
+    else { lg.mapping = L.recommendMapping(stats, 'split', App.S().mapDefaults); lg.mappingFrom = '자동추천'; }
     App.logs.push(lg); App.activeLog = App.logs.length - 1;
     return lg;
   };

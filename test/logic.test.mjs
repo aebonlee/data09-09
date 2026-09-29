@@ -314,9 +314,10 @@ console.log('Zone별 점수 배율 (2026-09-29 오전 2차 요청)');
     }
     assert.equal(n, 9 * 7 * 7 * 4);
   });
-  test('기본 배율에서 예시 로그 32개 이벤트 판정이 배율 도입 전(dea45da)과 한 글자도 같다', () => {
+  test('기본 배율에서 예시 로그 32개 이벤트 판정이 배율 도입 전(dea45da)과 한 글자도 같다 (Settling 상한이 없는 예전 기준)', () => {
     const s = S(), lbs = Smp.sampleLabels(s), cr = {};
-    L.PARAM_KEYS.forEach(k => { const r = L.criteriaFromLabels(lbs, k, s.recommend.minLabels); if (r.ok) cr[k] = r.crit; });
+    // 예전 기준에는 settleMax 가 없습니다 — 그 기준으로는 오늘 넣은 Settling 편입도 판정을 바꾸지 않아야 합니다
+    L.PARAM_KEYS.forEach(k => { const r = L.criteriaFromLabels(lbs, k, s.recommend.minLabels); if (r.ok) { cr[k] = r.crit; delete cr[k].settleMax; } });
     const rs = L.analyze(L.tableFromRows(Smp.sampleLog(Smp.sampleSet())), Smp.mappingFromProfile(Smp.sampleProfile()), s);
     // 아래 문자열은 배율을 넣기 전 코드(커밋 dea45da)로 같은 계산을 돌려 얻은 값입니다
     const before = 'PASS,FAIL-PITCH,CAUTION,FAIL-PITCH,PASS,NO DATA,FAIL-PITCH,NO DATA,PASS,FAIL-SLOW,FAIL-PITCH,CAUTION,FAIL-PITCH,PASS,NO DATA,PASS,FAIL-PITCH,NO DATA,PASS,FAIL-SHOCK,FAIL-PITCH,PASS,FAIL-PITCH,CAUTION,PASS,NO DATA,FAIL-PITCH,CAUTION,FAIL-PITCH,NO DATA,FAIL-PITCH,PASS';
@@ -400,6 +401,85 @@ console.log('실제 로그 열 형식 (2026-09-29 메일로 받은 sample data.c
     assert.equal(keys.size, 16, '검출된 파라미터 키 ' + [...keys].join(','));
     r.events.forEach(e => assert.ok(['PASS', 'CAUTION', 'FAIL-SHOCK', 'FAIL-PITCH', 'FAIL-SLOW', 'NO DATA'].includes(L.judgeEvent(e.f, { stabMax: 1, shockMax: 1, respMax: 1 }, S(), e.zone).status)));
   });
+}
+
+console.log('안정도에 Settling Time 편입 (2026-09-29 오전 2차 글) · 장비 기본값 (오후 답변)');
+{
+  const c2 = { stabMax: 1, shockMax: 0.5, respMax: 0.3, settleMax: 0.8 };
+  const f0 = { dPitch: 0.5, shockIndex: 0.3, response: 0.2 };
+  test('Settling 상한 안쪽(0.4/0.8=50%) → 안정도는 ΔPitch 50% 그대로, PASS', () => {
+    const j = L.judgeEvent({ ...f0, settling: 0.4, settleCap: 1.5 }, c2, S(), 1);
+    assert.equal(j.status, 'PASS'); assert.equal(j.items[0].score, 50); assert.equal(j.items[0].parts.length, 2);
+  });
+  test('Settling 이 길면 안정도 저하: 1.0 s(125%) → FAIL-PITCH, 0.76 s(95%) → CAUTION', () => {
+    const a = L.judgeEvent({ ...f0, settling: 1.0, settleCap: 1.5 }, c2, S(), 1);
+    assert.equal(a.status, 'FAIL-PITCH'); assert.equal(a.items[0].score, 125); assert.match(a.items[0].why, /Settling Time 상한 0.8 초과/);
+    assert.equal(L.judgeEvent({ ...f0, settling: 0.76, settleCap: 1.5 }, c2, S(), 1).status, 'CAUTION');
+  });
+  test('Window 안에서 정착 안 함 → Window 끝까지(1.5 s)로 계산해 FAIL-PITCH', () => {
+    const j = L.judgeEvent({ ...f0, settling: NaN, settleCap: 1.5 }, c2, S(), 1);
+    assert.equal(j.status, 'FAIL-PITCH'); assert.equal(j.items[0].parts[1].capped, true); assert.equal(j.items[0].parts[1].value, 1.5);
+  });
+  test('ΔPitch 가 아주 작아도(0.001) 그냥 PASS — 하한 없음(오후 답변 확인)', () => assert.equal(L.judgeEvent({ ...f0, dPitch: 0.001, settling: 0.1, settleCap: 1.5 }, c2, S(), 1).status, 'PASS'));
+  test('안정도 배율은 Settling 에도 곱한다: ×2 → 0.5 s 가 1.0 s 로 FAIL', () => {
+    const s = S(); s.zoneWeight[3].stab = 2;
+    const j = L.judgeEvent({ ...f0, dPitch: 0.2, settling: 0.5, settleCap: 1.5 }, c2, s, 3);
+    assert.equal(j.status, 'FAIL-PITCH'); assert.equal(j.items[0].parts[1].score, 125);
+  });
+  test('설정에서 끄거나 Settling 상한이 없으면 예전처럼 ΔPitch 만', () => {
+    const s = S(); s.stability.useSettling = false;
+    const f = { ...f0, settling: 5, settleCap: 1.5 };
+    assert.equal(L.judgeEvent(f, c2, s, 1).status, 'PASS');
+    const { settleMax, ...c3 } = c2;
+    const a = L.judgeEvent(f, c3, S(), 1), b = L.judgeEvent(f0, c3, S(), 1);
+    assert.deepEqual([a.status, a.items[0].name, a.items[0].why, a.items[0].score], [b.status, '안정도 (ΔPitch)', b.items[0].why, b.items[0].score]);
+  });
+  test('Accepted 라벨의 settling_s 최댓값이 Settling 상한', () => {
+    const lb = [0.3, 0.7, 0.5].map((v, i) => L.normalizeLabel({ direction: 'UP', zone: 1, event: 'Start', ramp_value: 100 + i, overall: 'Accept', delta_pitch: 0.1, shock_index: 0.1, response_s: 0.1, settling_s: v }));
+    assert.equal(L.criteriaFromLabels(lb, 'UP_1_start', 3).crit.settleMax, 0.7);
+  });
+  test('Settling Band = max(최소 0.015°, 0.2 × Pitch Peak-to-Peak) — 예시 로그 모든 이벤트', () => {
+    const r = L.analyze(L.tableFromRows(Smp.sampleLog(Smp.sampleSet())), Smp.mappingFromProfile(Smp.sampleProfile()), S());
+    r.events.forEach(e => near(e.f.settleBand, Math.max(0.015, 0.2 * e.f.pitchP2P), 0.0003));
+    assert.ok(r.events.every(e => L.isNum(e.f.settleCap) && e.f.settleCap > 0));
+  });
+  test('작은 흔들림: 0.01° 계단 신호는 Band 0.015° 로 정착 시각을 잡는다', () => {
+    // 0~0.3 s 는 0.02~0.03° 로 흔들리다 0.3 s 부터 0.00~0.01° 계단 → Band 0.015 이면 0.3 s, Band 0.1 이면 0 s(구별 안 됨)
+    const t = Array.from({ length: 101 }, (_, i) => i * 0.01), p = t.map((x, i) => x < 0.3 ? (i % 2 ? 0.03 : 0.02) : (i % 2 ? 0.01 : 0));
+    assert.equal(L.settlingTime(t, p, 0, 100, { settleBand: 0.015, settleTail: 0.2 }), 0.3);
+    assert.equal(L.settlingTime(t, p, 0, 100, { settleBand: 0.1, settleTail: 0.2 }), 0);
+  });
+  test('Settling 을 넣은 새 기준으로 예시 로그 판정: 바뀐 10건은 모두 더 엄한 쪽', () => {
+    const s = S(), lbs = Smp.sampleLabels(s), cr = {};
+    L.PARAM_KEYS.forEach(k => { const r = L.criteriaFromLabels(lbs, k, s.recommend.minLabels); if (r.ok) cr[k] = r.crit; });
+    const rs = L.analyze(L.tableFromRows(Smp.sampleLog(Smp.sampleSet())), Smp.mappingFromProfile(Smp.sampleProfile()), s);
+    const rank = { PASS: 0, CAUTION: 1, 'FAIL-SLOW': 2, 'FAIL-SHOCK': 2, 'FAIL-PITCH': 2, 'NO DATA': -1 };
+    let changed = 0;
+    rs.events.forEach(e => {
+      if (!cr[e.key]) return;
+      const { settleMax, ...old } = cr[e.key];
+      const a = L.judgeEvent(e.f, old, s, e.zone).status, b = L.judgeEvent(e.f, cr[e.key], s, e.zone).status;
+      if (a !== b) { changed++; assert.ok(rank[b] >= rank[a], a + ' → ' + b); assert.ok(b === 'FAIL-PITCH' || b === 'CAUTION'); }
+    });
+    assert.equal(changed, 10);
+  });
+  test('장비 기본값: 헤더에 단위·역할이 없으면 bar · Command · I0 0 / I100 650 mA 를 채운다', () => {
+    const tb = L.tableFromRows(Smp.realOrderLog(Smp.sampleSet(), 31)), m = L.recommendMapping(L.columnStats(tb), 'split', S().mapDefaults);
+    assert.equal(m.rows.headP.unit, 'bar'); assert.equal(m.rows.curUp.role, 'command'); assert.equal(m.rows.curDown.role, 'command');
+    assert.deepEqual([m.cal.UP, m.cal.DOWN], [{ i0: 0, i100: 650 }, { i0: 0, i100: 650 }]);
+    assert.match(m.rows.headP.reason, /장비 기본값 bar/);
+    assert.equal(L.validateMapping(m).canConfirm, false, '「확인」 체크 전에는 여전히 막힘');
+    Object.values(m.rows).forEach(r => { if (r.header) r.confirmed = true; }); m.excludeFirstRow = true;
+    const v = L.validateMapping(m); assert.equal(v.canConfirm, true); assert.ok(!v.warnings.some(w => /I0·I100/.test(w)), '전류 보정 없음 경고가 없다');
+    m.confirmed = true;
+    const r = L.analyze(tb, m, S()); assert.ok(r.events.length > 0 && r.events.every(e => !e.f.curUnit || e.f.curUnit === '%'));
+  });
+  test('장비 기본값 칸을 비우면(\'\') 채우지 않는다', () => {
+    const d = { headPUnit: '', curRole: '', i0: null, i100: null };
+    const m = L.recommendMapping(L.columnStats(L.tableFromRows(Smp.realOrderLog(Smp.sampleSet(), 31))), 'split', d);
+    assert.equal(m.rows.headP.unit, ''); assert.equal(m.rows.curUp.role, ''); assert.equal(m.cal.UP.i0, null);
+  });
+  test('ECU 값 = 기울기 × 1 (오후 답변 확정 — 기본값 그대로)', () => assert.equal(S().param.ecuScale, 1));
 }
 
 console.log(`\n${passed}개 통과${process.exitCode ? ' — 실패 있음' : ''}`);

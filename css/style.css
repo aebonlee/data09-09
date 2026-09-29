@@ -241,3 +241,5 @@ ul.msgs li.info { color: var(--muted); }
 .zw-field span { color: var(--muted); white-space: nowrap; }
 .zw-field .inp { width: 5.5em; min-height: 32px; padding: 3px 6px; }
 #zwTable .inp { width: 6em; text-align: right; }
+/* 안정도 부분 줄 (ΔPitch · Settling, 2026-09-29) */
+table.list tr.sub-row td { font-size: .82rem; color: var(--muted); background: #fafbfc; }

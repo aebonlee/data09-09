@@ -140,8 +140,8 @@
       });
     });
     var ex = main.querySelector('#exFirst'); if (ex) ex.addEventListener('change', function () { m.excludeFirstRow = ex.checked; unconfirm(lg); App.render(); });
-    main.querySelector('#curMode').addEventListener('change', function (e) { lg.mapping = L.recommendMapping(lg.stats, e.target.value); lg.mappingFrom = '자동추천 (' + (e.target.value === 'split' ? 'UP/DOWN 분리' : '단일 Current') + ')'; lg.profileChanges = []; lg.result = null; App.render(); });
-    main.querySelector('#autoRec').addEventListener('click', function () { lg.mapping = L.recommendMapping(lg.stats, m.mode); lg.mappingFrom = '자동추천'; lg.profileChanges = []; lg.result = null; App.render(); });
+    main.querySelector('#curMode').addEventListener('change', function (e) { lg.mapping = L.recommendMapping(lg.stats, e.target.value, App.S().mapDefaults); lg.mappingFrom = '자동추천 (' + (e.target.value === 'split' ? 'UP/DOWN 분리' : '단일 Current') + ')'; lg.profileChanges = []; lg.result = null; App.render(); });
+    main.querySelector('#autoRec').addEventListener('click', function () { lg.mapping = L.recommendMapping(lg.stats, m.mode, App.S().mapDefaults); lg.mappingFrom = '자동추천'; lg.profileChanges = []; lg.result = null; App.render(); });
     main.querySelector('#profApply').addEventListener('click', function () {
       var i = main.querySelector('#profSel').value; if (i === '') { App.toast('적용할 Profile 을 고르세요', true); return; }
       var pr = App.st.profiles[+i], ap = L.applyProfile(pr, lg.stats);

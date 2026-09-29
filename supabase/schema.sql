@@ -137,6 +137,12 @@ create table if not exists public.acceptance_criteria (
   constraint acceptance_criteria_uniq unique (owner_id, param_key)
 );
 
+-- 안정도 Settling Time 상한 (2026-09-29 추가 — 「settling time 도 안정도 평가의 한 부분」).
+-- 이미 만든 표에도 붙도록 ALTER 로 더한다(재실행 안전). 비워 두면 안정도는 ΔPitch 만 본다.
+alter table public.acceptance_criteria add column if not exists settle_max numeric;   -- 안정도 Settling Time 상한 (s)
+alter table public.acceptance_criteria drop constraint if exists acceptance_criteria_settle_nonneg;
+alter table public.acceptance_criteria add constraint acceptance_criteria_settle_nonneg check (settle_max is null or settle_max >= 0);
+
 -- Channel Mapping Profile — 같은 이름으로 저장하면 새 버전이 된다
 create table if not exists public.mapping_profile (
   id                 bigint generated always as identity primary key,

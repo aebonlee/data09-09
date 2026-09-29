@@ -4,13 +4,14 @@
   var L = root.CRLogic, C = root.CRCharts, App = root.App, esc = C.esc, fmt = C.fmt;
   var labFilter = '';
   // 안정도 ΔPitch 하한(stabMin)은 2026-09-29 수강생 요청으로 뺐습니다 — 세 항목 모두 상한으로 봅니다
-  var CRIT_FIELDS = [['stabMax', '안정도 ΔPitch 상한 (°)'], ['shockMax', 'Shock Index 상한'], ['respMax', '응답 시간 상한 (s)']];
+  // 안정도 Settling Time 상한(settleMax)은 2026-09-29 오전 2차 글로 더했습니다 — 비우면 안정도는 ΔPitch 만 봅니다
+  var CRIT_FIELDS = [['stabMax', '안정도 ΔPitch 상한 (°)'], ['settleMax', '안정도 Settling Time 상한 (s)'], ['shockMax', 'Shock Index 상한'], ['respMax', '응답 시간 상한 (s)']];
 
   // ── 기준 시험원 Profile · 라벨 DB ──────────────────────────────
   App.pages.profile = function (main) {
     var st = App.st, s = App.S();
     var h = '<div class="page-head"><h1>기준 시험원 Profile · 라벨</h1></div>';
-    h += '<div class="card"><h2>허용 범위 (Zone × 방향 × Start/Stop)</h2><p class="note">판정표의 기준입니다. 비워 둔 칸은 「기준 없음」으로 NO DATA 가 됩니다. 안정도(ΔPitch)·충격지수·응답성 모두 상한으로 봅니다(안정도 하한은 2026-09-29 요청으로 뺐습니다). 상한 안쪽 ' + s.cautionPct + '% 이내는 CAUTION 입니다(설정에서 바꿈).</p>' +
+    h += '<div class="card"><h2>허용 범위 (Zone × 방향 × Start/Stop)</h2><p class="note">판정표의 기준입니다. 비워 둔 칸은 「기준 없음」으로 NO DATA 가 됩니다. 안정도(ΔPitch · Settling Time)·충격지수·응답성 모두 상한으로 봅니다(안정도 하한은 2026-09-29 요청으로 뺐고, ΔPitch 가 아주 작은 것은 그냥 PASS 입니다). Settling 상한을 비워 두면 안정도는 ΔPitch 만 봅니다. 상한 안쪽 ' + s.cautionPct + '% 이내는 CAUTION 입니다(설정에서 바꿈).</p>' +
       '<div class="btn-row" style="margin-bottom:8px"><button class="btn btn-primary" id="fromLabels">Accepted 라벨로 허용 범위 만들기</button><button class="btn" id="critCsv">허용 범위 CSV</button>' + App.fileInput('critFile', '.csv,.xlsx,.xls', '허용 범위 가져오기') + '</div>' +
       '<div class="table-wrap"><table class="list"><thead><tr><th>파라미터</th>' + CRIT_FIELDS.map(function (f) { return '<th>' + f[1] + '</th>'; }).join('') + '<th>출처</th></tr></thead><tbody>' +
       L.PARAM_KEYS.map(function (k) {
@@ -138,10 +139,15 @@
       ['', 'continuityPct', '인접 Zone 차이 경고 (%)'], ['', 'maxDeltaPct', '추천 1회 변화폭 한도 (현재값 대비 %)'], ['profile', 'amp', '그래프 목표 Current (%)'], ['profile', 'hold', '그래프 유지 시간 (s)']]],
     ['데이터 검증', [['signal', 'dt', '목표 Sampling (s)'], ['quality', 'maxFillSamples', '이어 계산할 최대 결측 행 수'], ['quality', 'gapFactor', 'Sampling 공백 판정 (Δt 중앙값의 배수)']]],
     ['이벤트 검출 · Feature', [['detect', 'smoothWin', 'smoothing 창 (점)'], ['detect', 'startThr', 'Start Threshold |d(Arm%)/dt| (%/s)'], ['detect', 'stopThr', 'Stop Threshold (%/s)'], ['detect', 'hold', 'Hold Time (s)'], ['detect', 'pre', '분석 Window 앞 (s)'], ['detect', 'post', '분석 Window 뒤 (s)'],
-      ['detect', 'onsetFrac', 'Current 상승·감소 시작 판정 (변화폭 비율)'], ['detect', 'minStepFrac', 'Ramp 로 볼 최소 변화폭 (로그 전체 범위 비율)'], ['detect', 'settleBand', 'Settling 허용 Band (deg)'], ['detect', 'settleTail', 'Settling 최종값 평균 구간 (s)']]],
+      ['detect', 'onsetFrac', 'Current 상승·감소 시작 판정 (변화폭 비율)'], ['detect', 'minStepFrac', 'Ramp 로 볼 최소 변화폭 (로그 전체 범위 비율)'], ['detect', 'settleBand', 'Settling 최소 Band (deg)'], ['detect', 'settleBandFrac', 'Settling Band 비율 (Pitch Peak-to-Peak 대비)'], ['detect', 'settleTail', 'Settling 최종값 평균 구간 (s)']]],
     ['Shock Index (가정 식: 가중치 × max|dP/dt|/기준 + 가중치 × max|d²Pitch/dt²|/기준)', [['shock', 'refDpdt', 'dP/dt 기준값 (bar/s)'], ['shock', 'refD2pitch', 'd²Pitch/dt² 기준값 (deg/s²)'], ['shock', 'wDpdt', 'dP/dt 가중치'], ['shock', 'wD2pitch', 'd²Pitch/dt² 가중치']]],
     ['판정 · Safety · 추천', [['', 'cautionPct', 'CAUTION 폭 (한계 안쪽 %)'], ['safety', 'pressureMax', 'Safety Limit — Head Pressure 최대 (bar, 비우면 끔)'], ['safety', 'pitchAbsMax', 'Safety Limit — |Pitch| 최대 (deg, 비우면 끔)'],
-      ['recommend', 'minLabels', '추천·기준에 필요한 Accepted 라벨 최소 건수'], ['recommend', 'percentile', '추천 목표: Accepted ramp 값의 상위 백분위']]]
+      ['recommend', 'minLabels', '추천·기준에 필요한 Accepted 라벨 최소 건수'], ['recommend', 'percentile', '추천 목표: Accepted ramp 값의 상위 백분위'],
+      ['stability', 'useSettling', '안정도에 Settling Time 포함', [[true, '포함 (기본)'], [false, '빼기 — ΔPitch 만']]]]],
+    // 2026-09-29 오후 수강생 확정값 — 자동추천이 헤더에 단위·역할이 없을 때 채웁니다
+    ['장비 기본값 (자동추천이 채우는 값 — 2026-09-29 수강생 확정)', [['mapDefaults', 'headPUnit', 'Head Pressure 단위 (헤더에 없을 때)', [['bar', 'bar'], ['MPa', 'MPa'], ['', '채우지 않음']]],
+      ['mapDefaults', 'curRole', 'EPPR 전류 역할 (헤더로 모를 때)', [['command', 'Command'], ['actual', 'Actual Coil'], ['', '채우지 않음']]],
+      ['mapDefaults', 'i0', '전류 % 보정 I0 — 0% 전류 (mA)'], ['mapDefaults', 'i100', '전류 % 보정 I100 — 100% 전류 (mA)']]]
   ];
   // ── 소제목 옆 i 말풍선 (2026-09-29 수강생 요청) ─────────────────────
   // 문구는 기획서(docs/01_프로젝트_기획서.md)의 정의와 js/logic.js 의 실제 계산을 그대로 옮겼습니다.
@@ -172,7 +178,8 @@
       ['분석 Window 앞 · 뒤 (s)', '이벤트 시각의 앞 · 뒤 이 시간만큼을 Feature 계산 구간으로 씁니다(그래프의 노란 음영).'],
       ['Current 상승·감소 시작 판정 (변화폭 비율)', 'Start 는 Window 안 Current 의 최저→최고 변화폭에서 이 비율만큼 오른 지점을, Stop 은 최고에서 이 비율만큼 내려간 지점을 상승·감소 시작으로 봅니다. 여기서 암 움직임 시작·정지까지가 Response Delay · Stop Response Time 입니다.'],
       ['Ramp 로 볼 최소 변화폭 (로그 전체 범위 비율)', 'Window 안 Current 변화폭이 로그 전체 Current 범위 × 이 비율 이하이면 Ramp 로 보지 않고 응답 시간·실측 Ramp 를 계산하지 않습니다.'],
-      ['Settling 허용 Band (deg)', '이벤트 뒤 Pitch 가 최종값 ± 이 폭 안에 계속 머물기 시작할 때까지의 시간이 Settling Time 입니다(허용 Band 안으로 돌아오는 시간).'],
+      ['Settling Time', '조작 직후(Movement Start/Stop 시점)부터 Pitch 가 최종값 ± 허용 Band 안에 들어와 계속 머물기 시작할 때까지의 시간입니다. 길수록 안정도가 나쁩니다(2026-09-29 요청으로 안정도 판정에 편입).'],
+      ['Settling 최소 Band (deg) · Band 비율', '허용 Band = max(최소 Band, 비율 × 그 Window 의 Pitch Peak-to-Peak). 흔들림이 큰 이벤트는 흔들림 크기의 비율로, 흔들림이 아주 작은 이벤트는 최소 Band 로 봅니다. 기본 0.015° · 0.2 는 수강생 실제 로그(Pitch 가 0.01° 계단으로 아주 작게 변함)에서 정했습니다 — 0.01° 는 계단 하나라 정착하지 않은 것으로 나오고, 0.02° 이상은 대부분 0 s 가 되어 구별이 안 됩니다.'],
       ['Settling 최종값 평균 구간 (s)', 'Window 끝의 이 시간 동안 Pitch 평균을 최종값으로 씁니다. 이 구간에 들어와서야 Band 안에 들면 「창 안에서 정착 안 함」으로 표시합니다.']],
       src: '출처: 기획서 4장(이벤트 검출·Start/Stop 이벤트·수치미분)·5.1 Feature, 코드(smooth·detectEvents·eventFeatures·settlingTime). 초기값은 가정 — 실제 로그로 맞춤(기획서 10장 7번)' },
     { items: [
@@ -185,8 +192,15 @@
       ['Safety Limit — Head Pressure 최대 (bar)', '분석 Window 안(Current 상승·감소 시작 이후) Head Pressure 최고값이 이 값을 넘으면 감성 기준과 관계없이 FAIL-SHOCK 이고, 분석 중인 로그에 이런 이벤트가 있으면 최종 Confirm 을 막습니다. 비우면 끕니다.'],
       ['Safety Limit — |Pitch| 최대 (deg)', 'Absolute Pitch 의 크기가 이 값을 넘으면 FAIL-PITCH 이고, 최종 Confirm 을 막습니다. 비우면 끕니다.'],
       ['Accepted 라벨 최소 건수', '파라미터별 Accept 라벨이 이 건수보다 적으면 추천은 「추천 불가/데이터 부족」(NO DATA)이고, 「Accepted 라벨로 허용 범위 만들기」도 그 파라미터를 건너뜁니다.'],
+      ['안정도에 Settling Time 포함', '포함이면 안정도 점수 = max(ΔPitch 점수, Settling 점수)입니다. Settling 점수 = Settling Time × 안정도 배율 ÷ Settling 상한 × 100. 허용 범위에 Settling 상한이 없으면(예전 기준) ΔPitch 만 봅니다. Window 안에서 정착하지 않으면 Window 끝까지의 시간으로 계산합니다.'],
       ['추천 목표 백분위', 'Accept 라벨의 ramp 값 가운데 이 백분위 값을 목표로 삼습니다(높을수록 빠른 응답 쪽). 그 뒤 1회 변화폭 한도·Min/Max·Step 을 적용합니다. 목표가 「충격 최소화」가 아니라 「감성 허용범위 안에서 가장 좋은 응답성」이기 때문입니다.']],
-      src: '출처: 기획서 1장·5장(판정 상태·추천 Side Panel)·5.2, 코드(judgeItem·judgeEvent·recommend). Safety 값·CAUTION 폭은 확인 필요(기획서 10장 8번)' }
+      src: '출처: 기획서 1장·5장(판정 상태·추천 Side Panel)·5.2·11장, 코드(judgeItem·judgeEvent·settleIntoStability·recommend). Shock Index 식·CAUTION 폭·Safety·Threshold 는 수강생 답변대로 임의값 유지' },
+    { items: [
+      ['Head Pressure 단위', '실제 로그의 `LABHRP::FFD2_ArmCylinderHeadPressure` 는 헤더에 단위가 없습니다. 수강생이 bar 로 확정했습니다(2026-09-29). 헤더에 [단위] 가 있으면 그것을 씁니다.'],
+      ['EPPR 전류 역할', '`EPPR_ArmUp/ArmDown[mA]` 는 Command 전류로 확정했습니다. 이름에 cmd·actual 같은 말이 있으면 그것이 먼저입니다.'],
+      ['전류 % 보정 I0 · I100', '0 mA = 0 %, 650 mA = 100 % 로 확정했습니다. 자동추천이 UP·DOWN 보정칸에 채우고, 이 값이 있어야 %/sec 비교와 추천이 됩니다.'],
+      ['주의', '채운 값도 「제안」입니다. Channel Mapping 표에서 행마다 「확인」을 체크해야 Mapping Confirm 이 됩니다. 저장된 Mapping Profile 이 있으면 Profile 값이 먼저입니다.']],
+      src: '출처: 2026-09-29 오후 수강생 답변(기획서 11장), 코드(recommendMapping)' }
   ];
   var DATA_HELP = { items: [
     ['전체 백업 내보내기 · 가져오기', '파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 JSON 파일 하나로 저장하고 되살립니다. 로그 원본은 들어가지 않습니다.'],
@@ -196,7 +210,7 @@
     src: '출처: 기획서 3.2 Mapping Profile·7장, 코드(백업·예시 데이터)' };
   // Zone별 점수 배율 — 설정 화면 표와 Calibration 판정표가 같은 설명을 씁니다 (2026-09-29 오전 2차 요청)
   var WEIGHT_HELP = { items: [
-    ['배율이 들어가는 곳', '측정값에 이벤트가 난 Zone 의 배율을 곱한 「배율 적용값」을 허용 범위의 상한과 비교합니다. 상한 자체는 바꾸지 않습니다.'],
+    ['배율이 들어가는 곳', '측정값에 이벤트가 난 Zone 의 배율을 곱한 「배율 적용값」을 허용 범위의 상한과 비교합니다. 상한 자체는 바꾸지 않습니다. 안정도 배율은 ΔPitch 와 Settling Time 에 함께 곱합니다.'],
     ['항목 점수 (%)', '배율 적용값 ÷ 상한 × 100 입니다(한계 사용률). 100 을 넘으면 그 항목은 FAIL, 100 − CAUTION 폭(기본 90)을 넘으면 CAUTION 입니다.'],
     ['종합 점수 · 종합 판정', '종합 점수는 세 항목 점수 가운데 가장 큰 값입니다. 가장 한계에 가까운 항목이 종합 판정을 정합니다. 100 초과 항목이 있으면 FAIL(여럿이면 충격 → 안정도 → 응답성 순으로 대표), 없고 기준·값이 빠진 항목이 있으면 NO DATA, 그다음 CAUTION, 모두 안쪽이면 PASS 입니다. Safety Limit 초과는 배율과 관계없이 먼저 FAIL 입니다.'],
     ['배율 값의 뜻', '1 = 배율 없음(기본값, 배율을 넣기 전과 같은 판정). 1 보다 크면 그 Zone 에서 그 항목을 더 엄하게, 1 보다 작으면 느슨하게 봅니다. 0 이면 그 항목을 판정에서 빼는 것과 같습니다. 0~10 사이만 받습니다.'],
@@ -245,6 +259,7 @@
       h += '<div class="card"><h2 class="help-head"><span>' + esc(g[0]) + '</span>' + helpIcon(g[0], HELP[gi]) + '</h2><div class="form-grid">' + g[1].map(function (f) {
         var v = f[0] ? s[f[0]][f[1]] : s[f[1] || f[0]];
         if (f[0] === 'user') v = s.user;
+        if (Array.isArray(f[3])) return '<label class="field"><span>' + esc(f[2]) + '</span><select class="inp" data-set="' + f[0] + ':' + f[1] + '">' + f[3].map(function (o) { return App.opt(String(o[0]), o[1], String(v)); }).join('') + '</select></label>';
         return '<label class="field"><span>' + esc(f[2]) + '</span><input class="inp" ' + (f[3] === 'text' ? 'type="text"' : 'type="number" step="any"') + ' data-set="' + f[0] + ':' + f[1] + '" value="' + esc(v == null ? '' : v) + '"></label>';
       }).join('') + '</div></div>';
     });
@@ -269,9 +284,13 @@
       el.addEventListener('change', function () {
         var p = el.getAttribute('data-set').split(':');
         if (p[0] === 'user') { s.user = el.value.trim(); App.save(); return; }
+        if (el.tagName === 'SELECT') {
+          s[p[0]][p[1]] = el.value === 'true' ? true : el.value === 'false' ? false : el.value;
+          App.save(); App.toast('저장했습니다'); return;
+        }
         var v = el.value === '' ? null : L.num(el.value);
         if (v !== null && !L.isNum(v)) { App.toast('숫자를 넣으세요', true); return; }
-        var nullable = p[0] === 'safety';
+        var nullable = p[0] === 'safety' || p[0] === 'mapDefaults';
         if (v === null && !nullable) { App.toast('비울 수 없는 값입니다', true); App.render(); return; }
         if (p[0]) s[p[0]][p[1]] = v; else s[p[1]] = v;
         App.save(); App.toast('저장했습니다 — 분석 결과는 「다시 분석」 해야 반영됩니다');
