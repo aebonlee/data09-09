@@ -93,10 +93,14 @@ test('항목 판정: 상한 0.5, CAUTION 10% → 0.40 OK · 0.47 CAUTION · 0.6 
   assert.equal(L.judgeItem(0.6, null, 0.5, 10).state, 'fail');
   assert.equal(L.judgeItem(0.6, null, null, 10).state, 'nodata');
 });
-const crit = { stabMin: 0.1, stabMax: 1, shockMax: 0.5, respMax: 0.3 };
+const crit = { stabMax: 1, shockMax: 0.5, respMax: 0.3 };
 test('충격 초과 → FAIL-SHOCK', () => assert.equal(L.judgeEvent({ dPitch: 0.5, shockIndex: 0.6, response: 0.2 }, crit, S()).status, 'FAIL-SHOCK'));
 test('충격은 낮고 응답 느림 → FAIL-SLOW', () => assert.equal(L.judgeEvent({ dPitch: 0.5, shockIndex: 0.3, response: 0.4 }, crit, S()).status, 'FAIL-SLOW'));
 test('ΔPitch 초과 → FAIL-PITCH', () => assert.equal(L.judgeEvent({ dPitch: 1.2, shockIndex: 0.3, response: 0.2 }, crit, S()).status, 'FAIL-PITCH'));
+test('안정도 하한 삭제(09-29 요청): 옛 저장값 stabMin 이 남아 있어도 작은 ΔPitch 는 FAIL 이 아님', () => {
+  const j = L.judgeEvent({ dPitch: 0.05, shockIndex: 0.3, response: 0.2 }, Object.assign({ stabMin: 0.1 }, crit), S());
+  assert.equal(j.status, 'PASS'); assert.equal(j.items[0].crit, '1 이하');
+});
 test('모두 안쪽 → PASS', () => assert.equal(L.judgeEvent({ dPitch: 0.5, shockIndex: 0.3, response: 0.2 }, crit, S()).status, 'PASS'));
 test('기준 없음 → NO DATA', () => assert.equal(L.judgeEvent({ dPitch: 0.5, shockIndex: 0.3, response: 0.2 }, undefined, S()).status, 'NO DATA'));
 test('Safety Limit 이 감성보다 우선: 기준은 PASS 여도 압력 초과면 FAIL', () => {
@@ -112,7 +116,8 @@ const labels = [lab(100, 'Accept', .2, .5, .1), lab(200, 'Accept', .4, .7, .2), 
 test('Accepted 3건의 최소~최대로 허용 범위', () => {
   const r = L.criteriaFromLabels(labels, 'UP_1_start', 3);
   assert.equal(r.ok, true);
-  assert.deepEqual([r.crit.stabMin, r.crit.stabMax, r.crit.shockMax, r.crit.respMax], [0.2, 0.4, 0.7, 0.2]);
+  assert.deepEqual([r.crit.stabMax, r.crit.shockMax, r.crit.respMax], [0.4, 0.7, 0.2]);
+  assert.equal('stabMin' in r.crit, false, '안정도 하한은 만들지 않음(09-29 요청)');
   assert.equal(L.criteriaFromLabels(labels, 'UP_1_start', 4).ok, false);
 });
 test('추천: 상위 75% = 250, 현재 200 에서 ±20%(40) 제한 → 240', () => {
@@ -255,5 +260,33 @@ test('보정 없는 매핑이면 실측 Ramp 는 mA/s', () => {
   assert.equal(e.f.curUnit, 'mA');
   near(e.f.rampMeasured, 300 * 5.5, 80, 'mA/s'); // 1% = (650−100)/100 = 5.5 mA
 });
+
+console.log('차트 커서 — Tracking · Value Difference (09-29 요청)');
+{
+  const t = [0, 0.01, 0.02, 0.03], y = [0, 10, 30, NaN];
+  test('보간: 0.015 s 는 10 과 30 사이 가운데 → 20, 샘플 위치는 그 값', () => {
+    near(L.interpAt(t, y, 0.015), 20, 1e-9); assert.equal(L.interpAt(t, y, 0.01), 10); assert.equal(L.interpAt(t, y, 0), 0);
+    near(L.interpAt(t, y, 0.0025), 2.5, 1e-9); // 0 + (10−0)×0.25
+  });
+  test('보간: 범위 밖·결측 이웃은 NaN (값을 지어내지 않음)', () => {
+    assert.ok(Number.isNaN(L.interpAt(t, y, -0.001))); assert.ok(Number.isNaN(L.interpAt(t, y, 0.031)));
+    assert.ok(Number.isNaN(L.interpAt(t, y, 0.025))); assert.ok(Number.isNaN(L.interpAt(t, y, 0.03)));
+  });
+  test('Value Difference: A 0.005 s(5) · B 0.015 s(20) → Δy 15, Δx 0.01', () => {
+    const d = L.cursorDiff(t, y, 0.005, 0.015);
+    near(d.ya, 5, 1e-9); near(d.yb, 20, 1e-9); near(d.dy, 15, 1e-9); near(d.dx, 0.01, 1e-12);
+    const r = L.cursorDiff(t, y, 0.015, 0.005); near(r.dy, -15, 1e-9); near(r.dx, -0.01, 1e-12); // 순서를 바꾸면 부호가 바뀜
+    assert.ok(Number.isNaN(L.cursorDiff(t, y, 0.005, 0.025).dy));
+  });
+  test('Ramp Profile 선에서도 같은 보간: Start 100 %/s·유지 1 s·Stop 50 %/s, 0.5 s → 50 %, 2.5 s → 75 %', () => {
+    const pts = L.profilePoints(100, 50, { amp: 100, hold: 1 }); // [0,0] [1,100] [2,100] [4,0]
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    near(L.interpAt(xs, ys, 0.5), 50, 1e-9); near(L.interpAt(xs, ys, 1.5), 100, 1e-9); near(L.interpAt(xs, ys, 2.5), 75, 1e-9);
+    near(L.interpAt(xs, ys, 3.5), 25, 1e-9);
+  });
+  test('화면 비율 → 축 값: 양 끝에서 멈춤', () => {
+    assert.equal(L.fracToX(0.5, 10, 20), 15); assert.equal(L.fracToX(-1, 10, 20), 10); assert.equal(L.fracToX(3, 10, 20), 20);
+  });
+}
 
 console.log(`\n${passed}개 통과${process.exitCode ? ' — 실패 있음' : ''}`);

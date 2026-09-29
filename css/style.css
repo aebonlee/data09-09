@@ -191,3 +191,35 @@ ul.msgs li.info { color: var(--muted); }
 .empty { padding: 18px; text-align: center; color: var(--muted); }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── 차트 커서: Tracking · Value Difference (2026-09-29 수강생 요청) ── */
+.cursor-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 6px 0; }
+.cursor-bar .note { flex: 1 1 16em; margin: 0; }
+.tracks.cursor-on canvas { cursor: ew-resize; touch-action: pan-y; }
+.cur-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #e0007a; pointer-events: none; }
+.cur-line.cur-b { background: repeating-linear-gradient(to bottom, #e0007a 0 5px, transparent 5px 8px); }
+.cur-line[data-cur] { pointer-events: auto; cursor: ew-resize; }
+.cur-line[data-cur]::before { content: ""; position: absolute; top: 0; bottom: 0; left: -9px; width: 20px; }
+.cur-line[data-cur]:focus { outline: none; }
+.cur-line[data-cur]:focus-visible { box-shadow: 0 0 0 3px rgba(224, 0, 122, .35); }
+.cur-read { position: absolute; font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #7a0043; background: rgba(255, 255, 255, .9); border: 1px solid #f0b3d3; padding: 0 4px; border-radius: 3px; pointer-events: none; white-space: nowrap; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }
+.cur-table { margin-top: 8px; }
+.cur-dx { margin: 4px 0 0; }
+.ramp-svg .cur { cursor: ew-resize; }
+.ramp-svg .cur:focus { outline: none; }
+.ramp-svg .cur:focus-visible .cur-vis { stroke-width: 3.5; }
+
+/* ── 설정 소제목 옆 i 말풍선 (2026-09-29 수강생 요청) ── */
+.help-head { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.info-i { position: static; display: inline-flex; }
+.info-btn { width: 24px; height: 24px; min-width: 24px; border-radius: 50%; border: 1.5px solid var(--primary); background: var(--surface); color: var(--primary); font: 800 .8rem/1 Georgia, "Times New Roman", serif; font-style: italic; cursor: help; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.info-btn:hover, .info-btn[aria-expanded="true"] { background: var(--primary); color: var(--on-primary); }
+.info-btn:focus-visible { outline: 3px solid rgba(29, 94, 168, .4); outline-offset: 2px; }
+.info-tip { display: none; position: absolute; left: 0; top: calc(100% + 8px); z-index: 20; width: min(560px, 100%); background: #19222d; color: #fff; font-size: .86rem; font-weight: 400; line-height: 1.55; padding: 12px 14px; border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0, 0, 0, .22); }
+.info-tip::before { content: ""; position: absolute; top: -7px; left: var(--tip-arrow, 20px); border: 7px solid transparent; border-top: 0; border-bottom-color: #19222d; }
+.info-i:hover .info-tip, .info-i:focus-within .info-tip, .info-i.open .info-tip { display: block; }
+.info-tip dl { margin: 0; }
+.info-tip dt { font-weight: 800; color: #ffe8a3; margin-top: 6px; }
+.info-tip dt:first-child { margin-top: 0; }
+.info-tip dd { margin: 1px 0 0; }
+.info-tip .src { display: block; color: #b9c3cf; font-size: .78rem; margin-top: 6px; }

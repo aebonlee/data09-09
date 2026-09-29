@@ -38,6 +38,8 @@ SQL 예약어와 겹치는 것만 바꿨습니다.
 | 버전 `id` · Profile `id` | `version_id` · `profile_id` |
 | `criteria` 의 `stabMin` 등 | `stab_min` · `stab_max` · `shock_max` · `resp_max` |
 
+`stab_min`(안정도 ΔPitch 하한)은 2026-09-29 수강생 요청으로 도구에서 더 쓰지 않습니다. 칼럼은 nullable 이라 그대로 두고 비워 둡니다.
+
 ### 권한
 
 - 모든 표에 RLS(행 수준 보안)를 켰습니다.

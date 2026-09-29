@@ -227,12 +227,12 @@
   App.trackSpec = function (r, t0, t1, selNo, win, show) {
     var sig = r.sig, d = r.d, tracks = [
       { label: 'Arm Angle %', unit: '%', series: [{ y: sig.arm, color: '#19222d' }], bands: [30, 50, 70], fixed: [0, 100] },
-      { label: 'Current UP / DOWN', unit: (sig.curUnit.UP || '') + (sig.curUnit.DOWN && sig.curUnit.DOWN !== sig.curUnit.UP ? ' / ' + sig.curUnit.DOWN : ''), series: [{ y: sig.cur.UP, color: '#1d5ea8' }, { y: sig.mode === 'split' ? sig.cur.DOWN : null, color: '#c0392b', dash: [5, 3] }] },
+      { label: 'Current UP / DOWN', unit: (sig.curUnit.UP || '') + (sig.curUnit.DOWN && sig.curUnit.DOWN !== sig.curUnit.UP ? ' / ' + sig.curUnit.DOWN : ''), series: [{ y: sig.cur.UP, color: '#1d5ea8', name: 'UP' }, { y: sig.mode === 'split' ? sig.cur.DOWN : null, color: '#c0392b', dash: [5, 3], name: 'DOWN' }] },
       { label: 'Head Pressure', unit: 'bar', series: [{ y: sig.p, color: '#8a5a00' }] },
       { label: 'Pitch Angle', unit: 'deg', series: [{ y: sig.pitch, color: '#1b6e3a' }] }
     ];
     if (show.dArm) tracks.push({ label: 'd(Arm%)/dt', unit: '%/s', series: [{ y: d.dArm, color: '#19222d' }] });
-    if (show.dCur) tracks.push({ label: 'dCurrent/dt UP / DOWN', unit: '', series: [{ y: d.dCur.UP, color: '#1d5ea8' }, { y: sig.mode === 'split' ? d.dCur.DOWN : null, color: '#c0392b', dash: [5, 3] }] });
+    if (show.dCur) tracks.push({ label: 'dCurrent/dt UP / DOWN', unit: '', series: [{ y: d.dCur.UP, color: '#1d5ea8', name: 'UP' }, { y: sig.mode === 'split' ? d.dCur.DOWN : null, color: '#c0392b', dash: [5, 3], name: 'DOWN' }] });
     if (show.dP) tracks.push({ label: 'dP/dt', unit: 'bar/s', series: [{ y: d.dP, color: '#8a5a00' }] });
     if (show.dPitch) tracks.push({ label: 'dPitch/dt', unit: 'deg/s', series: [{ y: d.dPitch, color: '#1b6e3a' }] });
     if (show.d2Pitch) tracks.push({ label: 'd²Pitch/dt²', unit: 'deg/s²', series: [{ y: d.d2Pitch, color: '#1b6e3a' }] });

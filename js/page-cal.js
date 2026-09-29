@@ -30,7 +30,7 @@
       '<div class="btn-row" style="margin-bottom:6px"><div class="seg" role="group" aria-label="X축"><button type="button" data-x="time" aria-pressed="' + !sel.norm + '">X축 Time</button><button type="button" data-x="norm" aria-pressed="' + sel.norm + '">정규화 Phase</button></div>' +
       '<span class="legend"><span>' + C.legendItem('cur') + '</span>' +
       ['prev', 'ref', 'rec'].map(function (k) { return '<label><input type="checkbox" data-ov="' + k + '"' + (sel.show[k] ? ' checked' : '') + '>' + C.legendItem(k) + '</label>'; }).join('') + '</span></div>' +
-      '<div id="rampHost"></div>' +
+      '<div id="rampCurBar"></div><div id="rampHost"></div><div id="rampCurTbl" aria-live="polite"></div>' +
       '<p class="note">그래프 표시는 목표 Current ' + S().profile.amp + '% · 유지 ' + S().profile.hold + ' s 로 그린 개념 Profile 입니다(설정에서 바꿈). ' + (sel.norm ? '정규화 Phase 에서는 드래그를 끕니다.' : '파란·빨간 핸들을 좌우로 끌거나, 핸들에 초점을 두고 화살표 키로 바꿉니다.') + '</p>' +
       '<div class="edit-grid" id="editHost"></div>' +
       '<div class="btn-row" style="margin-top:10px"><button class="btn btn-sm" id="rsPrev">직전 적용값 복원 (이 Zone·방향)</button><button class="btn btn-sm" id="rsRef">기준 Profile 값 복원 (이 Zone·방향)</button></div>' +
@@ -67,12 +67,36 @@
     return out;
   }
 
+  // 커서 위치는 X축 종류(Time·정규화 Phase)마다 따로 기억합니다
+  function rampOpts(norm) { return { prof: S().profile, lines: lines(), norm: norm, cursorId: 'ramp-' + (norm ? 'norm' : 'time') }; }
   function renderRamp() {
     var host = document.getElementById('rampHost'); if (!host) return;
-    var res = C.rampSvg({ prof: S().profile, lines: lines(), norm: App.sel.norm });
+    var res = C.rampSvg(rampOpts(App.sel.norm));
     host.innerHTML = res.svg;
     bindHandles(host, res.geo);
+    bindRampCursor(host, res);
     renderEdit();
+  }
+  // 차트 커서 (2026-09-29 요청) — Ramp Profile 의 현재값·직전값·기준·추천 선을 같은 위치에서 읽습니다
+  function bindRampCursor(host, res) {
+    var bar = document.getElementById('rampCurBar'), tbl = document.getElementById('rampCurTbl'), svg = host.querySelector('svg'), geo = res.geo;
+    if (bar) { bar.innerHTML = C.cursorBar('선마다 같은 위치의 Current(%) 를 읽습니다.' + (App.sel.norm ? '' : ' 파란·빨간 핸들은 그대로 끌 수 있습니다.')); C.bindCursorBar(bar, function () { renderRamp(); var b = bar.querySelector('[data-cm][aria-pressed="true"]'); if (b) b.focus(); }); }
+    if (tbl) tbl.innerHTML = res.cursor.p ? C.cursorTable(res.cursor.rows, res.cursor.p, res.cursor.unit || 'Phase') : '';
+    if (!res.cursor.p) return;
+    var id = 'ramp-' + (App.sel.norm ? 'norm' : 'time');
+    function toX(clientX) {
+      var pt = svg.createSVGPoint(); pt.x = clientX; pt.y = 0;
+      var q = pt.matrixTransform(svg.getScreenCTM().inverse());
+      return L.fracToX((q.x - geo.L0) / (geo.W - geo.L0 - geo.R0), 0, geo.xMax);
+    }
+    // 끄는 동안에는 SVG 안쪽만 다시 그립니다(요소를 바꾸면 포인터 캡처가 끊김). 놓으면 핸들까지 다시 연결
+    function move(k) {
+      if (k) { renderRamp(); var f = document.querySelector('#rampHost [data-cur="' + k + '"]'); if (f) f.focus(); return; }
+      var r2 = C.rampSvg(rampOpts(App.sel.norm)), tmp = document.createElement('div'); tmp.innerHTML = r2.svg;
+      svg.innerHTML = tmp.firstChild.innerHTML;
+      if (tbl) tbl.innerHTML = C.cursorTable(r2.cursor.rows, r2.cursor.p, r2.cursor.unit || 'Phase');
+    }
+    C.bindCursorDrag(svg, id, 0, geo.xMax, toX, move, function (e) { return !!(e.target.closest && e.target.closest('.handle')); }, renderRamp);
   }
   function renderEdit() {
     var host = document.getElementById('editHost'); if (!host) return;
@@ -129,7 +153,7 @@
           if (which === 'start') slope = amp / Math.max(0.001, t);
           else slope = amp / Math.max(0.001, t - amp / App.st.values[key('start')] - s.profile.hold);
           App.st.values = Object.assign({}, App.st.values); App.st.values[k] = clampSnap(slope);
-          var res = C.rampSvg({ prof: s.profile, lines: lines(), norm: false });
+          var res = C.rampSvg(rampOpts(false));
           // 드래그 중에는 그래프·수치만 다시 그립니다(핸들 요소는 유지)
           var tmp = document.createElement('div'); tmp.innerHTML = res.svg;
           svg.innerHTML = tmp.firstChild.innerHTML;

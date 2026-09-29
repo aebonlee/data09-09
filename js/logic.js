@@ -545,6 +545,28 @@
     while (lo < hi) { var mid = (lo + hi) >> 1; if (t[mid] < time) lo = mid + 1; else hi = mid; }
     return lo;
   }
+  // ── 차트 커서 (2026-09-29 수강생 요청: Tracking · Value Difference) ──────
+  // 오름차순 x 축(t)에서 위치 x 의 y 를 이웃 두 점 선형 보간으로 구합니다.
+  // 범위 밖이거나 이웃 값이 숫자가 아니면 NaN(표시는 「—」) — 값을 지어내지 않습니다.
+  function interpAt(t, y, x) {
+    if (!t || !y || !t.length || !isNum(x)) return NaN;
+    var n = t.length;
+    if (x < t[0] || x > t[n - 1]) return NaN;
+    var i = idxAt(t, x);
+    if (t[i] === x || i === 0) return isNum(y[i]) ? y[i] : NaN;
+    var a = y[i - 1], b = y[i], ta = t[i - 1], tb = t[i];
+    if (!isNum(a) || !isNum(b)) return NaN;
+    if (tb === ta) return b;
+    return a + (b - a) * (x - ta) / (tb - ta);
+  }
+  // 두 커서 A(xa)·B(xb) 의 값과 차 — Δy = yB − yA, Δx = xB − xA
+  function cursorDiff(t, y, xa, xb) {
+    var ya = interpAt(t, y, xa), yb = interpAt(t, y, xb);
+    return { ya: ya, yb: yb, dy: isNum(ya) && isNum(yb) ? yb - ya : NaN, dx: isNum(xa) && isNum(xb) ? xb - xa : NaN };
+  }
+  // 화면 위치 비율(0~1) → 축 값. 차트 밖으로 끌어도 양 끝에 멈춥니다
+  function fracToX(frac, x0, x1) { return x0 + clamp(isNum(frac) ? frac : 0, 0, 1) * (x1 - x0); }
+
   function maxAbs(a, i0, i1) { var m = NaN; for (var i = i0; i <= i1; i++) { var v = Math.abs(a[i]); if (!(m >= v)) m = v; } return m; }
 
   // ── 이벤트 Window Feature (제출 기획서 5장) ─────────────────────
@@ -682,10 +704,11 @@
     if (a) return lo + ' 이상';
     return '—';
   }
+  // 안정도(ΔPitch)는 상한만 봅니다. 예전에 저장한 stabMin 이 남아 있어도 판정에 쓰지 않습니다(2026-09-29 요청)
   function judgeEvent(f, crit, s) {
     crit = crit || {};
     var items = [
-      { id: 'stability', name: '안정도 (ΔPitch)', unit: '°', value: f.dPitch, lo: crit.stabMin, hi: crit.stabMax, fail: 'FAIL-PITCH' },
+      { id: 'stability', name: '안정도 (ΔPitch)', unit: '°', value: f.dPitch, lo: null, hi: crit.stabMax, fail: 'FAIL-PITCH' },
       { id: 'shock', name: '충격지수 (Shock Index)', unit: '', value: f.shockIndex, lo: null, hi: crit.shockMax, fail: 'FAIL-SHOCK' },
       { id: 'response', name: '응답성 (' + (f.decayT != null ? 'Stop Response Time' : 'Response Delay') + ')', unit: 's', value: f.response, lo: null, hi: crit.respMax, fail: 'FAIL-SLOW' }
     ];
@@ -761,7 +784,7 @@
     return { labels: out, problems: problems };
   }
 
-  // Accepted 라벨의 범위로 허용 기준 만들기
+  // Accepted 라벨의 범위로 허용 기준 만들기 — 안정도는 ΔPitch 상한만(2026-09-29 수강생 요청으로 하한 삭제)
   function criteriaFromLabels(labels, key, minLabels) {
     var acc = labels.filter(function (l) { return labelKey(l) === key && l.overall === 'Accept'; });
     if (acc.length < minLabels) return { ok: false, n: acc.length };
@@ -770,7 +793,6 @@
     return {
       ok: true, n: acc.length,
       crit: {
-        stabMin: dp.length ? round(Math.min.apply(null, dp), 3) : null,
         stabMax: dp.length ? round(Math.max.apply(null, dp), 3) : null,
         shockMax: sh.length ? round(Math.max.apply(null, sh), 3) : null,
         respMax: rs.length ? round(Math.max.apply(null, rs), 3) : null,
@@ -848,7 +870,7 @@
     sigDef: sigDef, signalsForMode: signalsForMode, headerUnit: headerUnit, columnStats: columnStats, scoreHeader: scoreHeader, emptyMapping: emptyMapping,
     recommendMapping: recommendMapping, applyProfile: applyProfile, mappingToProfile: mappingToProfile, calibrationState: calibrationState,
     validateMapping: validateMapping, qualityReport: qualityReport, buildSignals: buildSignals, fillGaps: fillGaps, smooth: smooth, derivative: derivative, deriveSignals: deriveSignals, derivationVersion: derivationVersion,
-    detectEvents: detectEvents, idxAt: idxAt, eventFeatures: eventFeatures, measuredRamp: measuredRamp, settlingTime: settlingTime, shockIndex: shockIndex, analyze: analyze,
+    detectEvents: detectEvents, idxAt: idxAt, interpAt: interpAt, cursorDiff: cursorDiff, fracToX: fracToX, eventFeatures: eventFeatures, measuredRamp: measuredRamp, settlingTime: settlingTime, shockIndex: shockIndex, analyze: analyze,
     judgeItem: judgeItem, judgeEvent: judgeEvent, labelKey: labelKey, labelFromEvent: labelFromEvent, normalizeLabel: normalizeLabel, labelsFromTable: labelsFromTable,
     criteriaFromLabels: criteriaFromLabels, recommend: recommend, recommendAll: recommendAll,
     setToRows: setToRows, setFromTable: setFromTable, eventRows: eventRows

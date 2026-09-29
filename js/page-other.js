@@ -3,13 +3,14 @@
   'use strict';
   var L = root.CRLogic, C = root.CRCharts, App = root.App, esc = C.esc, fmt = C.fmt;
   var labFilter = '';
-  var CRIT_FIELDS = [['stabMin', '안정도 ΔPitch 하한 (°)'], ['stabMax', '안정도 ΔPitch 상한 (°)'], ['shockMax', 'Shock Index 상한'], ['respMax', '응답 시간 상한 (s)']];
+  // 안정도 ΔPitch 하한(stabMin)은 2026-09-29 수강생 요청으로 뺐습니다 — 세 항목 모두 상한으로 봅니다
+  var CRIT_FIELDS = [['stabMax', '안정도 ΔPitch 상한 (°)'], ['shockMax', 'Shock Index 상한'], ['respMax', '응답 시간 상한 (s)']];
 
   // ── 기준 시험원 Profile · 라벨 DB ──────────────────────────────
   App.pages.profile = function (main) {
     var st = App.st, s = App.S();
     var h = '<div class="page-head"><h1>기준 시험원 Profile · 라벨</h1></div>';
-    h += '<div class="card"><h2>허용 범위 (Zone × 방향 × Start/Stop)</h2><p class="note">판정표의 기준입니다. 비워 둔 칸은 「기준 없음」으로 NO DATA 가 됩니다. 스케치의 판정표처럼 안정도는 범위, 충격지수·응답성은 상한으로 봅니다. 상한·하한 안쪽 ' + s.cautionPct + '% 이내는 CAUTION 입니다(설정에서 바꿈).</p>' +
+    h += '<div class="card"><h2>허용 범위 (Zone × 방향 × Start/Stop)</h2><p class="note">판정표의 기준입니다. 비워 둔 칸은 「기준 없음」으로 NO DATA 가 됩니다. 안정도(ΔPitch)·충격지수·응답성 모두 상한으로 봅니다(안정도 하한은 2026-09-29 요청으로 뺐습니다). 상한 안쪽 ' + s.cautionPct + '% 이내는 CAUTION 입니다(설정에서 바꿈).</p>' +
       '<div class="btn-row" style="margin-bottom:8px"><button class="btn btn-primary" id="fromLabels">Accepted 라벨로 허용 범위 만들기</button><button class="btn" id="critCsv">허용 범위 CSV</button>' + App.fileInput('critFile', '.csv,.xlsx,.xls', '허용 범위 가져오기') + '</div>' +
       '<div class="table-wrap"><table class="list"><thead><tr><th>파라미터</th>' + CRIT_FIELDS.map(function (f) { return '<th>' + f[1] + '</th>'; }).join('') + '<th>출처</th></tr></thead><tbody>' +
       L.PARAM_KEYS.map(function (k) {
@@ -43,7 +44,7 @@
       var made = [], lack = [];
       L.PARAM_KEYS.forEach(function (k) { var r = L.criteriaFromLabels(st.labels, k, s.recommend.minLabels); if (r.ok) { st.criteria[k] = r.crit; made.push(k); } else lack.push(L.paramLabel(k) + ' (Accepted ' + r.n + '건)'); });
       App.save(); App.render();
-      App.dialog('허용 범위 만들기', '<p>' + made.length + '개 파라미터의 허용 범위를 Accepted 라벨의 최소~최대로 바꿨습니다.</p>' + (lack.length ? '<p>Accepted 라벨이 ' + s.recommend.minLabels + '건 미만이라 그대로 둔 것:</p><ul class="msgs">' + lack.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : ''));
+      App.dialog('허용 범위 만들기', '<p>' + made.length + '개 파라미터의 허용 범위를 Accepted 라벨의 최댓값(ΔPitch·Shock Index·응답 시간 상한)으로 바꿨습니다.</p>' + (lack.length ? '<p>Accepted 라벨이 ' + s.recommend.minLabels + '건 미만이라 그대로 둔 것:</p><ul class="msgs">' + lack.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : ''));
     });
     main.querySelector('#critCsv').addEventListener('click', function () {
       App.downloadCsv('허용범위', ['parameter_key', 'parameter'].concat(CRIT_FIELDS.map(function (f) { return f[0]; })).concat(['source']), L.PARAM_KEYS.map(function (k) { var c = st.criteria[k] || {}; return [k, L.paramLabel(k)].concat(CRIT_FIELDS.map(function (f) { return c[f[0]]; })).concat([c.source || '']); }));
@@ -142,22 +143,103 @@
     ['판정 · Safety · 추천', [['', 'cautionPct', 'CAUTION 폭 (한계 안쪽 %)'], ['safety', 'pressureMax', 'Safety Limit — Head Pressure 최대 (bar, 비우면 끔)'], ['safety', 'pitchAbsMax', 'Safety Limit — |Pitch| 최대 (deg, 비우면 끔)'],
       ['recommend', 'minLabels', '추천·기준에 필요한 Accepted 라벨 최소 건수'], ['recommend', 'percentile', '추천 목표: Accepted ramp 값의 상위 백분위']]]
   ];
+  // ── 소제목 옆 i 말풍선 (2026-09-29 수강생 요청) ─────────────────────
+  // 문구는 기획서(docs/01_프로젝트_기획서.md)의 정의와 js/logic.js 의 실제 계산을 그대로 옮겼습니다.
+  // 뜻이나 값이 아직 정해지지 않은 것은 「확인 필요」로 적었습니다(기획서 10장·11장 목록과 같음).
+  // HELP[소제목 순서] = { items: [[이름, 설명]], src: 출처 }
+  var HELP = [
+    { items: [['작업자 이름', '변경 이력의 「변경자」, 버전의 「작성자」로 기록되고, 라벨 기록 창의 「기준 시험원」 칸에 미리 채워집니다.']],
+      src: '출처: 코드(변경 이력·라벨 기록)' },
+    { items: [
+      ['최솟값 · 최댓값 (%/s)', '16개 Ramp 파라미터(단위 %/sec)가 가질 수 있는 범위입니다. 벗어나면 「저장 불가」로 Calibration Set 저장·Export 를 막고, 추천값도 이 안에서만 냅니다.'],
+      ['변화 Step', '값을 바꾸는 최소 단위입니다. 입력·드래그 값은 이 단위로 맞추고, 단위가 아니면 경고합니다. 그래프 핸들을 화살표 키로 옮기면 1 Step(Shift 는 10 Step)씩 바뀝니다.'],
+      ['ECU 값 = 기울기 × 배율', 'Calibration 화면 「② 기울기(%/sec)」와 「③ Parameter 값(ECU)」 사이의 환산 배율입니다. 1단계는 배율 하나로 가정했습니다 — 실제 관계는 확인 필요(기획서 10장 4번).'],
+      ['ECU 값 소수 자리', '기울기를 ECU 값으로 바꿀 때 반올림하는 소수 자리 수입니다(화면·Export 공통).'],
+      ['인접 Zone 차이 경고 (%)', '같은 방향·같은 Start/Stop 에서 이웃한 두 Zone 값의 차이가 두 값 중 큰 쪽의 이 % 를 넘으면 「Zone 경계 연속성」 경고를 띄웁니다. 저장은 확인 후 됩니다.'],
+      ['추천 1회 변화폭 한도 (%)', '추천이 한 번에 바꿀 수 있는 크기를 현재값의 이 % 로 제한합니다(기획서의 Max Delta per Iteration).'],
+      ['그래프 목표 Current (%) · 유지 시간 (s)', 'Ramp Profile 그래프를 그리는 데만 씁니다. Start Ramp 로 0 → 목표 Current 까지 오르고(시간 = 목표 ÷ 기울기), 유지 시간만큼 머문 뒤 Stop(End) Ramp 로 0 까지 내려가는 개념 Profile 입니다. 판정·추천에는 쓰지 않습니다. 실제 ECU Current Profile 의 어느 구간을 지배하는지는 확인 필요(기획서 10장 5번).']],
+      src: '출처: 기획서 3.3·5장(편집 안전장치·추천 Side Panel)·8장 1단계 2번, 코드(validateSet·recommend·profilePoints). 기본값은 모두 가정 — 실제 명칭·Min/Max·Step 은 확인 필요(10장 4번)' },
+    { items: [
+      ['목표 Sampling (s)', '로그의 기대 샘플 간격입니다(제출 기획서: 10 ms). Δt 중앙값이 이 값과 10% 넘게 다르면 경고합니다. 미분은 이 값이 아니라 실제 시간값으로 계산합니다.'],
+      ['이어 계산할 최대 결측 행 수', '결측·숫자 변환 실패가 연속 이 행 수 이하이면 앞 값으로 이어 계산하고, 넘으면 그 구간을 표시해 분석 Window 에 걸린 이벤트를 NO DATA 로 둡니다. 결측을 0 으로 채우지 않습니다.'],
+      ['Sampling 공백 판정 (Δt 중앙값의 배수)', '두 샘플 사이 간격이 Δt 중앙값 × 이 배수보다 크면 Sampling 공백으로 봅니다. 공백을 포함한 이벤트는 NO DATA 입니다.']],
+      src: '출처: 기획서 3.2 데이터 검증, 코드(qualityReport·buildSignals·fillGaps)' },
+    { items: [
+      ['smoothing 창 (점)', '미분하기 전에 신호를 매끄럽게 하는 가운데 이동평균의 점 수입니다(짝수면 1 을 더해 홀수로). Arm %·Current·Head P·Pitch 에 쓰고, d²Pitch/dt² 는 dPitch/dt 에 한 번 더 씁니다. 그 뒤 중앙차분으로 미분합니다.'],
+      ['Start Threshold |d(Arm%)/dt| (%/s)', '정지 상태에서 |d(Arm%)/dt| 가 이 값을 넘은 상태가 Hold Time 이상 이어지면 Movement Start 입니다(넘기 시작한 시점).'],
+      ['Stop Threshold (%/s)', '움직이는 중 |d(Arm%)/dt| 가 이 값 아래에 Hold Time 이상 머물면 Movement Stop 입니다. Start 보다 낮게 두어 노이즈로 반복 검출되지 않게 합니다(hysteresis).'],
+      ['Hold Time (s)', '위 두 조건이 끊기지 않고 이어져야 하는 최소 시간입니다.'],
+      ['분석 Window 앞 · 뒤 (s)', '이벤트 시각의 앞 · 뒤 이 시간만큼을 Feature 계산 구간으로 씁니다(그래프의 노란 음영).'],
+      ['Current 상승·감소 시작 판정 (변화폭 비율)', 'Start 는 Window 안 Current 의 최저→최고 변화폭에서 이 비율만큼 오른 지점을, Stop 은 최고에서 이 비율만큼 내려간 지점을 상승·감소 시작으로 봅니다. 여기서 암 움직임 시작·정지까지가 Response Delay · Stop Response Time 입니다.'],
+      ['Ramp 로 볼 최소 변화폭 (로그 전체 범위 비율)', 'Window 안 Current 변화폭이 로그 전체 Current 범위 × 이 비율 이하이면 Ramp 로 보지 않고 응답 시간·실측 Ramp 를 계산하지 않습니다.'],
+      ['Settling 허용 Band (deg)', '이벤트 뒤 Pitch 가 최종값 ± 이 폭 안에 계속 머물기 시작할 때까지의 시간이 Settling Time 입니다(허용 Band 안으로 돌아오는 시간).'],
+      ['Settling 최종값 평균 구간 (s)', 'Window 끝의 이 시간 동안 Pitch 평균을 최종값으로 씁니다. 이 구간에 들어와서야 Band 안에 들면 「창 안에서 정착 안 함」으로 표시합니다.']],
+      src: '출처: 기획서 4장(이벤트 검출·Start/Stop 이벤트·수치미분)·5.1 Feature, 코드(smooth·detectEvents·eventFeatures·settlingTime). 초기값은 가정 — 실제 로그로 맞춤(기획서 10장 7번)' },
+    { items: [
+      ['Shock Index 식 (가정)', 'dP/dt 가중치 × (max|dP/dt| ÷ dP/dt 기준값) + d²Pitch/dt² 가중치 × (max|d²Pitch/dt²| ÷ d²Pitch/dt² 기준값). 물리량 「충격량」이 아니라 시험팀이 정하는 「충격감 지수」이며, 조합식·가중치는 확인 필요(기획서 10장 8번).'],
+      ['dP/dt 기준값 (bar/s) · d²Pitch/dt² 기준값 (deg/s²)', '각 Feature 를 나누는 값입니다. 측정값이 기준값과 같으면 그 항은 가중치만큼 더해집니다.'],
+      ['dP/dt 가중치 · d²Pitch/dt² 가중치', '두 항을 더할 때의 비중입니다.']],
+      src: '출처: 기획서 5.1(Shock Index 가정 식), 코드(shockIndex)' },
+    { items: [
+      ['CAUTION 폭 (한계 안쪽 %)', '측정값이 상한 안쪽 이 % 이내(상한 × (1 − 폭/100) 보다 큼)이면 CAUTION(Borderline, 반복시험 권장)입니다. 경계 폭은 제출 자료에 없어 가정한 값입니다(기획서 5.2).'],
+      ['Safety Limit — Head Pressure 최대 (bar)', '분석 Window 안(Current 상승·감소 시작 이후) Head Pressure 최고값이 이 값을 넘으면 감성 기준과 관계없이 FAIL-SHOCK 이고, 분석 중인 로그에 이런 이벤트가 있으면 최종 Confirm 을 막습니다. 비우면 끕니다.'],
+      ['Safety Limit — |Pitch| 최대 (deg)', 'Absolute Pitch 의 크기가 이 값을 넘으면 FAIL-PITCH 이고, 최종 Confirm 을 막습니다. 비우면 끕니다.'],
+      ['Accepted 라벨 최소 건수', '파라미터별 Accept 라벨이 이 건수보다 적으면 추천은 「추천 불가/데이터 부족」(NO DATA)이고, 「Accepted 라벨로 허용 범위 만들기」도 그 파라미터를 건너뜁니다.'],
+      ['추천 목표 백분위', 'Accept 라벨의 ramp 값 가운데 이 백분위 값을 목표로 삼습니다(높을수록 빠른 응답 쪽). 그 뒤 1회 변화폭 한도·Min/Max·Step 을 적용합니다. 목표가 「충격 최소화」가 아니라 「감성 허용범위 안에서 가장 좋은 응답성」이기 때문입니다.']],
+      src: '출처: 기획서 1장·5장(판정 상태·추천 Side Panel)·5.2, 코드(judgeItem·judgeEvent·recommend). Safety 값·CAUTION 폭은 확인 필요(기획서 10장 8번)' }
+  ];
+  var DATA_HELP = { items: [
+    ['전체 백업 내보내기 · 가져오기', '파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 JSON 파일 하나로 저장하고 되살립니다. 로그 원본은 들어가지 않습니다.'],
+    ['예시 데이터 불러오기', '합성(가상) 로그 2개·예시 Set·가상 라벨을 불러옵니다. 실제 장비·시험 결과가 아닙니다.'],
+    ['모두 지우기', '이 브라우저에 저장된 위 항목을 모두 지웁니다. 되돌릴 수 없으니 먼저 백업하세요.'],
+    ['Mapping Profile', '로그·Channel Mapping 화면에서 확정해 저장한 매핑(원문 헤더·단위·역할·보정값)입니다. 같은 구조의 로그를 올리면 제안 상태로 되살아납니다. 감성 평가용 기준 시험원 Profile 과는 별개입니다.']],
+    src: '출처: 기획서 3.2 Mapping Profile·7장, 코드(백업·예시 데이터)' };
+  var helpN = 0;
+  function helpIcon(title, hp) {
+    if (!hp) return '';
+    var id = 'help-' + (++helpN);
+    return '<span class="info-i"><button type="button" class="info-btn" aria-label="' + esc(title) + ' — 설명 보기" aria-describedby="' + id + '" aria-expanded="false">i</button>' +
+      '<span class="info-tip" role="tooltip" id="' + id + '"><dl>' + hp.items.map(function (x) { return '<dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') + '</dl><span class="src">' + esc(hp.src) + '</span></span></span>';
+  }
+  // 마우스 올림·키보드 초점은 CSS 로, 모바일 탭은 누를 때마다 열고 닫습니다. Esc·바깥 누름으로 닫힘
+  function bindHelp(main) {
+    main.querySelectorAll('.info-i').forEach(function (w) {
+      var b = w.querySelector('.info-btn');
+      function place() { var tip = w.querySelector('.info-tip'); tip.style.setProperty('--tip-arrow', Math.max(8, b.offsetLeft + b.offsetWidth / 2 - 7) + 'px'); }
+      place();
+      b.addEventListener('click', function () {
+        var open = !w.classList.contains('open');
+        main.querySelectorAll('.info-i.open').forEach(function (o) { o.classList.remove('open'); o.querySelector('.info-btn').setAttribute('aria-expanded', 'false'); });
+        if (open) { w.classList.add('open'); b.setAttribute('aria-expanded', 'true'); } else b.blur();
+      });
+      w.addEventListener('keydown', function (e) { if (e.key === 'Escape') { w.classList.remove('open'); b.setAttribute('aria-expanded', 'false'); b.blur(); } });
+    });
+    if (!App._helpDoc) {
+      App._helpDoc = true;
+      document.addEventListener('pointerdown', function (e) {
+        if (e.target.closest && e.target.closest('.info-i')) return;
+        document.querySelectorAll('.info-i.open').forEach(function (o) { o.classList.remove('open'); o.querySelector('.info-btn').setAttribute('aria-expanded', 'false'); });
+      });
+    }
+  }
+
   App.pages.settings = function (main) {
     var s = App.S();
     var h = '<div class="page-head"><h1>설정 · 데이터</h1></div><div class="alert info">아래 기본값은 모두 <b>가정</b>입니다. 제출자의 실제 사양·로그·기준을 받으면 이 화면에서 바꿉니다. 바꾼 설정은 이 브라우저에 저장되고 백업 파일에도 들어갑니다.</div>';
-    GROUPS.forEach(function (g) {
-      h += '<div class="card"><h2>' + esc(g[0]) + '</h2><div class="form-grid">' + g[1].map(function (f) {
+    GROUPS.forEach(function (g, gi) {
+      h += '<div class="card"><h2 class="help-head"><span>' + esc(g[0]) + '</span>' + helpIcon(g[0], HELP[gi]) + '</h2><div class="form-grid">' + g[1].map(function (f) {
         var v = f[0] ? s[f[0]][f[1]] : s[f[1] || f[0]];
         if (f[0] === 'user') v = s.user;
         return '<label class="field"><span>' + esc(f[2]) + '</span><input class="inp" ' + (f[3] === 'text' ? 'type="text"' : 'type="number" step="any"') + ' data-set="' + f[0] + ':' + f[1] + '" value="' + esc(v == null ? '' : v) + '"></label>';
       }).join('') + '</div></div>';
     });
     h += '<div class="btn-row" style="margin-bottom:16px"><button class="btn" id="setDefault">설정만 기본값으로</button></div>';
-    h += '<div class="card"><h2>데이터</h2><p class="note">파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 한 파일로 백업하고 되살립니다. 로그 원본은 들어가지 않습니다.</p><div class="btn-row">' +
+    h += '<div class="card"><h2 class="help-head"><span>데이터</span>' + helpIcon('데이터', DATA_HELP) + '</h2><p class="note">파라미터·버전·이력·라벨·허용 범위·Mapping Profile·설정을 한 파일로 백업하고 되살립니다. 로그 원본은 들어가지 않습니다.</p><div class="btn-row">' +
       '<button class="btn" id="backup">전체 백업 내보내기 (JSON)</button>' + App.fileInput('restoreFile', '.json', '백업 가져오기') +
       '<button class="btn" id="sampleAll">예시 데이터 불러오기</button><button class="btn btn-danger" id="wipe">모두 지우기</button></div>' +
       '<h3 style="margin-top:14px">Mapping Profile (' + App.st.profiles.length + '개)</h3>' + (App.st.profiles.length ? '<ul class="msgs">' + App.st.profiles.map(function (p, i) { return '<li>' + esc(p.id + ' · ' + p.name + ' v' + p.version + ' · ' + (p.author || '') + ' · ' + (p.confirmedAt || '')) + ' <button class="btn btn-sm btn-danger" data-rmp="' + i + '">삭제</button></li>'; }).join('') + '</ul>' : '<p class="note">저장된 Profile 이 없습니다.</p>') + '</div>';
     main.innerHTML = h;
+    bindHelp(main);
     main.querySelectorAll('[data-set]').forEach(function (el) {
       el.addEventListener('change', function () {
         var p = el.getAttribute('data-set').split(':');

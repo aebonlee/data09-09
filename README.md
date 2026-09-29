@@ -19,6 +19,7 @@
 - [프로젝트 기획서 (Markdown)](docs/01_프로젝트_기획서.md)
 - [프로젝트 기획서 (Word, docx)](docs/01_프로젝트_기획서.docx)
 - [패들릿 제출 원문](docs/source/패들릿_제출_원문.md)
+- [2026-09-29 패들릿 추가 요청](docs/source/2026-09-29_패들릿_추가요청.md)
 
 ## 제출 자료 (`docs/source/`)
 
@@ -72,7 +73,9 @@
 | Movement Start/Stop 검출 | 완료 | Start/Stop Threshold(hysteresis)·Hold Time, 이벤트 시점 Arm % 로 Zone, 부호로 UP/DOWN, 분석 Window (AC-04). 초기값은 가정 |
 | 시간 동기 Track 그래프 | 완료 | Arm %·Current UP/DOWN·Head P·Pitch 와 선택 파생 신호를 같은 시간축의 별도 트랙으로, Zone 경계선·이벤트 Marker·Window 음영 (AC-12) |
 | 이벤트 Feature · 판정 | 완료 | Response Delay/Stop Response Time, 실측 Ramp, ΔP·dP/dt, Pitch·ΔPitch·dPitch/dt·d²Pitch/dt², Settling, Shock Index(가정 식). 판정표는 스케치대로 안정도·충격지수·응답성·종합. DOWN Pitch 별도 표시 (AC-05) |
-| 기준 시험원 Profile · 라벨 DB | 완료 | 16개 파라미터별 허용 범위 입력·가져오기·내보내기, 이벤트 라벨 기록(충격감·Pitch감·응답성·전체·메모·시험 Set), 라벨 파일 가져오기/내보내기, Accepted 라벨로 허용 범위 만들기 |
+| 기준 시험원 Profile · 라벨 DB | 완료 | 16개 파라미터별 허용 범위 입력·가져오기·내보내기, 이벤트 라벨 기록(충격감·Pitch감·응답성·전체·메모·시험 Set), 라벨 파일 가져오기/내보내기, Accepted 라벨로 허용 범위 만들기(ΔPitch·Shock Index·응답 시간 상한 — 안정도 하한은 2026-09-29 요청으로 삭제) |
+| 차트 커서 (2026-09-29 요청) | 완료 | 로그 탭 트랙·Calibration 탭 이벤트 트랙·Ramp Profile 에 Tracking(수직 커서 1개, 모든 트랙 동기화)·Value Difference(커서 A·B, Δy·Δx) 모드. 마우스·터치 드래그, 화살표 키, 값은 선형 보간 |
+| 설정 설명 말풍선 (2026-09-29 요청) | 완료 | 설정·데이터 화면 소제목 7곳 옆 i 아이콘 — 마우스 올림·키보드 초점·모바일 탭으로 파라미터 뜻 표시(기획서·코드 정의에서 옮김) |
 | 판정 상태 | 완료 | PASS / CAUTION / FAIL-SHOCK / FAIL-PITCH / FAIL-SLOW / NO DATA, Safety Limit 우선(초과 시 최종 Confirm 차단) (AC-06) |
 | 추천 Side Panel (Rule 기반) | 완료 | Accepted 라벨 ramp 값의 상위 백분위 쪽으로, 1회 변화폭·Min/Max·Step 안에서. 근거 부족은 「추천 불가/데이터 부족」, 「적용」 전 값 불변, 전류 % 보정 없으면 차단 (AC-07, AC-09) |
 | Calibration Version 관리 | 완료 | 저장(부모 버전·작성자·사유·최종 Confirm·승인메모), 복원, 기준 지정, 현재/기준/이전/추천 비교, 변경 이력 CSV, Set CSV·Excel·JSON 내보내기·가져오기 (AC-08, AC-11) |
